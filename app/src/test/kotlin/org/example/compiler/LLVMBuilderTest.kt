@@ -82,4 +82,40 @@ class LLVMBuilderTest {
 
         assertEquals(expectedLLVM, actualLLVM)
     }
+
+    @Test
+    fun `different size float numbers`() {
+        val llvmBuilder = LLVMBuilder()
+        val actualLLVM = llvmBuilder
+            .declaration(Type.F64, "x")
+            .declaration(Type.F32, "y")
+            .read("x")
+            .read("y")
+            .writeVariable("x")
+            .writeVariable("y")
+            .build()
+
+        val expectedLLVM = """
+            @.str.1 = private unnamed_addr constant [4 x i8] c"%lf\00", align 1
+            @.str.2 = private unnamed_addr constant [3 x i8] c"%f\00", align 1
+
+            define i32 @main() {
+                %1 = alloca double, align 8
+                %2 = alloca float, align 4
+                %3 = call i32 (ptr, ...) @scanf(ptr noundef @.str.1, ptr noundef %1)
+                %4 = call i32 (ptr, ...) @scanf(ptr noundef @.str.2, ptr noundef %2)
+                %5 = load double, ptr %1, align 8
+                %6 = call i32 (ptr, ...) @printf(ptr noundef @.str.1, double noundef %5)
+                %7 = load float, ptr %2, align 4
+                %8 = fpext float %7 to double
+                %9 = call i32 (ptr, ...) @printf(ptr noundef @.str.2, double noundef %8)
+                ret i32 0
+            }
+
+            declare i32 @scanf(ptr noundef, ...)
+            declare i32 @printf(ptr noundef, ...)
+        """.trimIndent()
+
+        assertEquals(expectedLLVM, actualLLVM)
+    }
 }

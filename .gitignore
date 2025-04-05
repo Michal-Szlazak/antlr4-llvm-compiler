@@ -5,4 +5,5 @@
 build
 .idea
 *.ll
+.kotlin
 *.out

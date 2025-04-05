@@ -2,7 +2,9 @@ package org.example.compiler
 
 enum class Type(val typeName: String, val llvm: String, val size: Int) {
     I32("i32", "i32", 4),
-    I64("i64", "i64", 8);
+    I64("i64", "i64", 8),
+    F32("f32", "float", 4),
+    F64("f64", "double", 8);
 
     companion object {
         fun fromTypeName(typeName: String): Type? {
@@ -60,9 +62,19 @@ class LLVMBuilder {
         operations.add(Operation.WRITE)
 
         val variable = variableNameToVariable.getValue(variableName)
-        val instructionId = emitInstruction("load ${variable.type.llvm}, ptr %${variable.id}, align ${variable.type.size}")
-        val constantStringId = addConstantString(createFormatForType(variable.type))
-        emitInstruction("call i32 (ptr, ...) @printf(ptr noundef $constantStringId, ${variable.type.llvm} noundef %$instructionId)")
+        val instructionId =
+            emitInstruction("load ${variable.type.llvm}, ptr %${variable.id}, align ${variable.type.size}")
+
+        // TODO: Maybe refactor when function calling will be handled?
+        if (variable.type == Type.F32) {
+            // According to Clang compiler implementation floats are extended to double for printf method call
+            val extensionInstructionId = emitInstruction("fpext float %$instructionId to ${Type.F64.llvm}")
+            val constantStringId = addConstantString(createFormatForType(variable.type))
+            emitInstruction("call i32 (ptr, ...) @printf(ptr noundef $constantStringId, ${Type.F64.llvm} noundef %$extensionInstructionId)")
+        } else {
+            val constantStringId = addConstantString(createFormatForType(variable.type))
+            emitInstruction("call i32 (ptr, ...) @printf(ptr noundef $constantStringId, ${variable.type.llvm} noundef %$instructionId)")
+        }
 
         return this
     }
@@ -95,6 +107,8 @@ class LLVMBuilder {
         return when (type) {
             Type.I32 -> "%d"
             Type.I64 -> "%ld"
+            Type.F32 -> "%f"
+            Type.F64 -> "%lf"
         }
     }
 

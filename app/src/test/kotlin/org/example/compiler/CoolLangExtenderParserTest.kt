@@ -105,10 +105,36 @@ class CoolLangExtenderParserTest {
     }
 
     @Test
+    fun `different size float numbers`() {
+        givenCodeExpectSyntaxTree(
+            input = """
+                f64 x;
+                f32 y;
+            """.trimIndent(),
+            expectedTree = """
+                +- program
+                   +- statement
+                   |  +- declaration
+                   |  |  +- type
+                   |  |  |  +- "f64"
+                   |  |  +- "x"
+                   |  +- ";"
+                   +- statement
+                      +- declaration
+                      |  +- type
+                      |  |  +- "f32"
+                      |  +- "y"
+                      +- ";"
+            """.trimIndent()
+        )
+    }
+
+    // TODO: Current behaviour works like this, handle errors in such scenarios
+    @Test
     fun `type that doesn't exist`() {
         givenCodeExpectSyntaxTree(
             input = """
-                type x
+                type x;
             """.trimIndent(),
             expectedTree = """
                 +- program
