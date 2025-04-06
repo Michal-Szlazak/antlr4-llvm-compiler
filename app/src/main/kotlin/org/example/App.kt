@@ -1,9 +1,8 @@
 package org.example
 
-import org.antlr.v4.runtime.tree.ParseTreeWalker
-import org.example.compiler.CoolLangExtendedParser
-import org.example.compiler.CoolLangListenerImpl
+import org.example.compiler.CoolLangToLLVMTranspiler
 import org.example.compiler.LLVMCompiler
+import org.example.compiler.error.InvalidSyntaxException
 import java.io.File
 import java.nio.file.Paths
 import kotlin.io.path.Path
@@ -17,26 +16,20 @@ fun main(args: Array<String>) {
         .toFile()
         .readText(Charsets.UTF_8)
 
-    val parser = CoolLangExtendedParser.fromStringInput(codeToCompile)
-    val programContext = parser.program()
-
-    if(parser.numberOfSyntaxErrors != 0) {
+    val llvmCode = try {
+        CoolLangToLLVMTranspiler().transpile(codeToCompile)
+    } catch (e: InvalidSyntaxException) {
+        e.syntaxErrors.forEach(System.err::println)
         exitProcess(1)
     }
-
-    val listener = CoolLangListenerImpl()
-    val walker = ParseTreeWalker()
-    walker.walk(listener, programContext)
-
-    val llvmCode = listener.getLLVM()
 
     val llvmFile = File(parsedArgs.outputLLVMFilename)
     llvmFile.writeText(llvmCode, Charsets.UTF_8)
 
-    val compiler = LLVMCompiler()
+    val llvmCompiler = LLVMCompiler()
 
     try {
-        compiler.compile(llvmFile, Path(parsedArgs.outputBinaryFilename))
+        llvmCompiler.compile(llvmFile, Path(parsedArgs.outputBinaryFilename))
     } catch (e: Exception) {
         println("Compilation failed: ${e.message}")
     }

@@ -4,11 +4,11 @@ program : statement* ;
 
 statement : (declaration | writeOperation | readOperation) ';' ;
 
-declaration : type ID;
+declaration : type ID ;
 
 value : ID | STRING ;
 
-type : 'i32' | 'i64' | 'f32' | 'f64' ;
+type : ID ;
 
 writeOperation : 'write' value ;
 
@@ -16,7 +16,7 @@ readOperation : 'read' ID ;
 
 // Lexer Rules
 
-ID : [a-zA-Z]+ ;
+ID : [a-zA-Z]+ [a-zA-Z0-9]*;
 
 WS : [ \t\r\n]+ -> skip ;
 

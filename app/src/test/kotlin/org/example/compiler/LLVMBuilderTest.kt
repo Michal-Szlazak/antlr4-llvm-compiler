@@ -9,8 +9,8 @@ class LLVMBuilderTest {
     fun `write read operations`() {
         val llvmBuilder = LLVMBuilder()
         val actualLLVM = llvmBuilder
-            .declaration(Type.I32, "x")
-            .declaration(Type.I32, "y")
+            .declaration("i32", "x")
+            .declaration("i32", "y")
             .writeString("Enter two numbers: ")
             .read("x")
             .read("y")
@@ -52,8 +52,8 @@ class LLVMBuilderTest {
     fun `different size integers`() {
         val llvmBuilder = LLVMBuilder()
         val actualLLVM = llvmBuilder
-            .declaration(Type.I64, "x")
-            .declaration(Type.I32, "y")
+            .declaration("i64", "x")
+            .declaration("i32", "y")
             .read("x")
             .read("y")
             .writeVariable("x")
@@ -87,8 +87,8 @@ class LLVMBuilderTest {
     fun `different size float numbers`() {
         val llvmBuilder = LLVMBuilder()
         val actualLLVM = llvmBuilder
-            .declaration(Type.F64, "x")
-            .declaration(Type.F32, "y")
+            .declaration("f64", "x")
+            .declaration("f32", "y")
             .read("x")
             .read("y")
             .writeVariable("x")

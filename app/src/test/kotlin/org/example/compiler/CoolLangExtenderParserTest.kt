@@ -129,19 +129,6 @@ class CoolLangExtenderParserTest {
         )
     }
 
-    // TODO: Current behaviour works like this, handle errors in such scenarios
-    @Test
-    fun `type that doesn't exist`() {
-        givenCodeExpectSyntaxTree(
-            input = """
-                type x;
-            """.trimIndent(),
-            expectedTree = """
-                +- program
-            """.trimIndent()
-        )
-    }
-
     private fun givenCodeExpectSyntaxTree(input: String, expectedTree: String) {
         val actualTree = CoolLangExtendedParser.fromStringInput(input).toSyntaxTreeString()
         assertEquals(expectedTree, actualTree)

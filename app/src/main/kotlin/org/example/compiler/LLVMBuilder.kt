@@ -1,5 +1,7 @@
 package org.example.compiler
 
+import org.example.compiler.error.*
+
 enum class Type(val typeName: String, val llvm: String, val size: Int) {
     I32("i32", "i32", 4),
     I64("i64", "i64", 8),
@@ -25,6 +27,7 @@ data class StringRepresentation(val id: Int)
 class LLVMBuilder {
     private val statements = mutableSetOf<String>()
     private val operations = mutableSetOf<Operation>()
+    private val syntaxErrors = mutableListOf<SyntaxError>()
 
     private val constantStringToStringRepresentation = mutableMapOf<String, StringRepresentation>()
     private var currentConstantStringId = 1
@@ -32,8 +35,17 @@ class LLVMBuilder {
     private val variableNameToVariable = mutableMapOf<String, Variable>()
     private var currentInstructionId = 1
 
-    fun declaration(type: Type, name: String): LLVMBuilder {
-        require(name !in variableNameToVariable)
+    fun declaration(typeName: String, name: String): LLVMBuilder {
+        val errors = buildList {
+            if (Type.fromTypeName(typeName) == null) add(UndeclaredIdentifierError(typeName))
+            if (name in variableNameToVariable) add(RedefinitionError(name))
+        }
+        if (errors.isNotEmpty()) {
+            syntaxErrors.addAll(errors)
+            return this
+        }
+
+        val type = Type.fromTypeName(typeName)!!
 
         val instructionId = emitInstruction("alloca ${type.llvm}, align ${type.size}")
         variableNameToVariable[name] = Variable(
@@ -45,7 +57,13 @@ class LLVMBuilder {
     }
 
     fun read(variableName: String): LLVMBuilder {
-        require(variableName in variableNameToVariable)
+        val errors = buildList {
+            if (variableName !in variableNameToVariable) add(UndeclaredIdentifierError(variableName))
+        }
+        if(errors.isNotEmpty()) {
+            syntaxErrors.addAll(errors)
+            return this
+        }
 
         operations.add(Operation.READ)
 
@@ -67,7 +85,7 @@ class LLVMBuilder {
 
         // TODO: Maybe refactor when function calling will be handled?
         if (variable.type == Type.F32) {
-            // According to Clang compiler implementation floats are extended to double for printf method call
+            // According to Clang compiler implementation floats are extended to double for printf call
             val extensionInstructionId = emitInstruction("fpext float %$instructionId to ${Type.F64.llvm}")
             val constantStringId = addConstantString(createFormatForType(variable.type))
             emitInstruction("call i32 (ptr, ...) @printf(ptr noundef $constantStringId, ${Type.F64.llvm} noundef %$extensionInstructionId)")
@@ -113,6 +131,10 @@ class LLVMBuilder {
     }
 
     fun build(): String {
+        if(syntaxErrors.isNotEmpty()) {
+            throw InvalidSyntaxException(syntaxErrors)
+        }
+
         val sb = StringBuilder()
 
         sb.appendLine(constantStringToStringRepresentation.toList().joinToString("\n") { (string, representation) ->
