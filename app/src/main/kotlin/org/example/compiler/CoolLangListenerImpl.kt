@@ -55,6 +55,7 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
 
         if (!llvmBuilder.doesVariableExist(idToken.text)) {
             syntaxErrors.add(SyntaxErrorWithLineData(UndeclaredIdentifierError(idToken.text), idToken))
+            return
         }
         llvmBuilder.read(idToken.text)
     }
