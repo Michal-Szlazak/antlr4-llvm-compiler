@@ -61,7 +61,7 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
     }
 
     override fun exitWriteOperation(ctx: CoolLangParser.WriteOperationContext) {
-        val valueContext = ctx.value() ?: return
+        val valueContext = ctx.expression() ?: return
 
         when {
             valueContext.ID() != null -> if (llvmBuilder.doesVariableExist(valueContext.text)) {

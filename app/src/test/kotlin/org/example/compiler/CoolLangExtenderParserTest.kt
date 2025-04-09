@@ -38,7 +38,7 @@ class CoolLangExtenderParserTest {
                    +- statement
                    |  +- writeOperation
                    |  |  +- "write"
-                   |  |  +- value
+                   |  |  +- expression
                    |  |     +- ""Enter two numbers: ""
                    |  +- ";"
                    +- statement
@@ -54,25 +54,25 @@ class CoolLangExtenderParserTest {
                    +- statement
                    |  +- writeOperation
                    |  |  +- "write"
-                   |  |  +- value
+                   |  |  +- expression
                    |  |     +- ""You have entered: ""
                    |  +- ";"
                    +- statement
                    |  +- writeOperation
                    |  |  +- "write"
-                   |  |  +- value
+                   |  |  +- expression
                    |  |     +- "x"
                    |  +- ";"
                    +- statement
                    |  +- writeOperation
                    |  |  +- "write"
-                   |  |  +- value
+                   |  |  +- expression
                    |  |     +- "", ""
                    |  +- ";"
                    +- statement
                       +- writeOperation
                       |  +- "write"
-                      |  +- value
+                      |  +- expression
                       |     +- "y"
                       +- ";"
             """.trimIndent()

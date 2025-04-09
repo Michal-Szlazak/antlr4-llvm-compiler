@@ -6,11 +6,17 @@ statement : (declaration | writeOperation | readOperation) ';' ;
 
 declaration : type ID ;
 
-value : ID | STRING ;
-
 type : ID ;
 
-writeOperation : 'write' value ;
+writeOperation : 'write' expression ;
+
+expression
+    : expression op=('*'|'/') expression
+    | expression op=('+'|'-') expression
+    | '(' expression ')'
+    | ID
+    | STRING
+    ;
 
 readOperation : 'read' ID ;
 
