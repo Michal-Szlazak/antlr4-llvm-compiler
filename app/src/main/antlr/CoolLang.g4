@@ -8,14 +8,13 @@ declaration : type ID ;
 
 type : ID ;
 
-writeOperation : 'write' expression ;
+writeOperation : 'write' (expression | STRING) ;
 
 expression
     : expression op=('*'|'/') expression
     | expression op=('+'|'-') expression
     | '(' expression ')'
     | ID
-    | STRING
     ;
 
 readOperation : 'read' ID ;

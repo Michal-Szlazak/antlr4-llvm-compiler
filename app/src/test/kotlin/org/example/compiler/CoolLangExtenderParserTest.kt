@@ -38,8 +38,7 @@ class CoolLangExtenderParserTest {
                    +- statement
                    |  +- writeOperation
                    |  |  +- "write"
-                   |  |  +- expression
-                   |  |     +- ""Enter two numbers: ""
+                   |  |  +- ""Enter two numbers: ""
                    |  +- ";"
                    +- statement
                    |  +- readOperation
@@ -54,8 +53,7 @@ class CoolLangExtenderParserTest {
                    +- statement
                    |  +- writeOperation
                    |  |  +- "write"
-                   |  |  +- expression
-                   |  |     +- ""You have entered: ""
+                   |  |  +- ""You have entered: ""
                    |  +- ";"
                    +- statement
                    |  +- writeOperation
@@ -66,8 +64,7 @@ class CoolLangExtenderParserTest {
                    +- statement
                    |  +- writeOperation
                    |  |  +- "write"
-                   |  |  +- expression
-                   |  |     +- "", ""
+                   |  |  +- "", ""
                    |  +- ";"
                    +- statement
                       +- writeOperation
@@ -124,6 +121,50 @@ class CoolLangExtenderParserTest {
                       |  +- type
                       |  |  +- "f32"
                       |  +- "y"
+                      +- ";"
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `writing expressions`() {
+        givenCodeExpectSyntaxTree(
+            input = """
+                f64 x;
+                f64 y;
+                
+                write x * (y + x);
+            """.trimIndent(),
+            expectedTree = """
+                +- program
+                   +- statement
+                   |  +- declaration
+                   |  |  +- type
+                   |  |  |  +- "f64"
+                   |  |  +- "x"
+                   |  +- ";"
+                   +- statement
+                   |  +- declaration
+                   |  |  +- type
+                   |  |  |  +- "f64"
+                   |  |  +- "y"
+                   |  +- ";"
+                   +- statement
+                      +- writeOperation
+                      |  +- "write"
+                      |  +- expression
+                      |     +- expression
+                      |     |  +- "x"
+                      |     +- "*"
+                      |     +- expression
+                      |        +- "("
+                      |        +- expression
+                      |        |  +- expression
+                      |        |  |  +- "y"
+                      |        |  +- "+"
+                      |        |  +- expression
+                      |        |     +- "x"
+                      |        +- ")"
                       +- ";"
             """.trimIndent()
         )

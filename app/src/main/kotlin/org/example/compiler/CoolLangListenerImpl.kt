@@ -61,21 +61,33 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
     }
 
     override fun exitWriteOperation(ctx: CoolLangParser.WriteOperationContext) {
-        val valueContext = ctx.expression() ?: return
-
         when {
-            valueContext.ID() != null -> if (llvmBuilder.doesVariableExist(valueContext.text)) {
-                llvmBuilder.writeVariable(valueContext.ID().text)
+            ctx.expression() != null -> {
+                llvmBuilder.writeLastCalculated()
+            }
+
+            ctx.STRING() != null -> llvmBuilder.writeString(ctx.STRING().text.trim('"'))
+        }
+    }
+
+    override fun exitExpression(ctx: CoolLangParser.ExpressionContext) {
+        when {
+            ctx.ID() != null -> if (llvmBuilder.doesVariableExist(ctx.ID().text)) {
+                llvmBuilder.loadVariableToStack(ctx.ID().text)
             } else {
                 syntaxErrors.add(
                     SyntaxErrorWithLineData(
-                        UndeclaredIdentifierError(valueContext.text),
-                        valueContext.ID()
+                        UndeclaredIdentifierError(ctx.ID().text),
+                        ctx.ID()
                     )
                 )
             }
-
-            valueContext.STRING() != null -> llvmBuilder.writeString(valueContext.STRING().text.trim('"'))
+            ctx.op != null -> when(ctx.op.text){
+                "*" -> llvmBuilder.multiply()
+                "/" -> llvmBuilder.divide()
+                "+" -> llvmBuilder.add()
+                "-" -> llvmBuilder.subtract()
+            }
         }
     }
 

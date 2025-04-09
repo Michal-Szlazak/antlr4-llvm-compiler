@@ -12,6 +12,14 @@ enum class Type(val typeName: String, val llvm: String, val size: Int) {
             return entries.firstOrNull { it.typeName == typeName }
         }
     }
+
+    fun isFloat(): Boolean {
+        return this in listOf(F32, F64)
+    }
+
+    fun isInt(): Boolean {
+        return this in listOf(I32, I64)
+    }
 }
 
 enum class Operation(val declaration: String) {
@@ -32,6 +40,9 @@ class LLVMBuilder {
 
     private val variableNameToVariable = mutableMapOf<String, Variable>()
     private var currentInstructionId = 1
+    private val tempVariableStack = ArrayDeque<Variable>()
+    private fun <T> ArrayDeque<T>.push(element: T) = addLast(element)
+    private fun <T> ArrayDeque<T>.pop() = removeLastOrNull()
 
     fun declaration(type: Type, name: String): LLVMBuilder {
         val instructionId = emitInstruction("alloca ${type.llvm}, align ${type.size}")
@@ -56,19 +67,52 @@ class LLVMBuilder {
     fun writeVariable(variableName: String): LLVMBuilder {
         operations.add(Operation.WRITE)
 
+        loadVariableToStack(variableName)
+        writeLastCalculated()
+
+        return this
+    }
+
+    fun loadVariableToStack(variableName: String): LLVMBuilder {
         val variable = variableNameToVariable.getValue(variableName)
         val instructionId =
             emitInstruction("load ${variable.type.llvm}, ptr %${variable.id}, align ${variable.type.size}")
+        tempVariableStack.push(Variable(instructionId, variable.type))
 
-        // TODO: Maybe refactor when function calling will be handled?
-        if (variable.type == Type.F32) {
-            // According to Clang compiler implementation floats are extended to double for printf call
-            val extensionInstructionId = emitInstruction("fpext float %$instructionId to ${Type.F64.llvm}")
-            val constantStringId = addConstantString(createFormatForType(variable.type))
-            emitInstruction("call i32 (ptr, ...) @printf(ptr noundef $constantStringId, ${Type.F64.llvm} noundef %$extensionInstructionId)")
+        return this
+    }
+
+    fun multiply(): LLVMBuilder {
+        return twoOperandOperation("mul nsw", "fmul")
+    }
+
+    fun divide(): LLVMBuilder {
+        return twoOperandOperation("sdiv", "fdiv")
+    }
+
+    fun add(): LLVMBuilder {
+        return twoOperandOperation("add nsw", "fadd")
+    }
+
+    fun subtract(): LLVMBuilder {
+        return twoOperandOperation("sub nsw", "fsub")
+    }
+
+    private fun twoOperandOperation(intCommandPrefix: String, floatCommandPrefix: String): LLVMBuilder {
+        val second = tempVariableStack.pop() ?: return this
+        val first = tempVariableStack.pop() ?: return this
+
+        if (first.type == second.type) {
+            val instructionId = if (first.type.isInt()) {
+                emitInstruction("$intCommandPrefix ${first.type.llvm} %${first.id}, %${second.id}")
+            } else if (first.type.isFloat()) {
+                emitInstruction("$floatCommandPrefix ${first.type.llvm} %${currentInstructionId - 2}, %${currentInstructionId - 1}")
+            } else {
+                error("There is currently no type which is neither int nor float")
+            }
+            tempVariableStack.push(Variable(instructionId, first.type))
         } else {
-            val constantStringId = addConstantString(createFormatForType(variable.type))
-            emitInstruction("call i32 (ptr, ...) @printf(ptr noundef $constantStringId, ${variable.type.llvm} noundef %$instructionId)")
+            TODO()
         }
 
         return this
@@ -122,13 +166,31 @@ class LLVMBuilder {
         sb.appendLine("}")
         sb.appendLine()
         sb.append(operations.joinToString("\n") { it.declaration })
-        sb.append("")
 
         return sb.toString()
     }
 
     fun doesVariableExist(variableName: String): Boolean {
         return variableName in variableNameToVariable
+    }
+
+    fun writeLastCalculated(): LLVMBuilder {
+        operations.add(Operation.WRITE)
+        val lastCalculated = tempVariableStack.pop() ?: return this
+
+        // TODO: Maybe refactor when function calling will be handled?
+        if (lastCalculated.type == Type.F32) {
+            // According to Clang compiler implementation floats are extended to double for printf call
+            val extensionInstructionId =
+                emitInstruction("fpext float %${lastCalculated.id} to ${Type.F64.llvm}")
+            val constantStringId = addConstantString(createFormatForType(lastCalculated.type))
+            emitInstruction("call i32 (ptr, ...) @printf(ptr noundef $constantStringId, ${Type.F64.llvm} noundef %$extensionInstructionId)")
+        } else {
+            val constantStringId = addConstantString(createFormatForType(lastCalculated.type))
+            emitInstruction("call i32 (ptr, ...) @printf(ptr noundef $constantStringId, ${lastCalculated.type.llvm} noundef %${lastCalculated.id})")
+        }
+
+        return this
     }
 
 }
