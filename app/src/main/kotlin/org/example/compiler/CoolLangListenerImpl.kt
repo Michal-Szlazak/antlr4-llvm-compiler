@@ -2,10 +2,7 @@ package org.example.compiler
 
 import CoolLangBaseListener
 import CoolLangParser
-import org.example.compiler.error.InvalidSyntaxException
-import org.example.compiler.error.RedefinitionError
-import org.example.compiler.error.SyntaxErrorWithLineData
-import org.example.compiler.error.UndeclaredIdentifierError
+import org.example.compiler.error.*
 
 class CoolLangListenerImpl : CoolLangBaseListener() {
 
@@ -82,11 +79,21 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
                     )
                 )
             }
-            ctx.op != null -> when(ctx.op.text){
-                "*" -> llvmBuilder.multiply()
-                "/" -> llvmBuilder.divide()
-                "+" -> llvmBuilder.add()
-                "-" -> llvmBuilder.subtract()
+
+            ctx.op != null -> try {
+                when (ctx.op.text) {
+                    "*" -> llvmBuilder.multiply()
+                    "/" -> llvmBuilder.divide()
+                    "+" -> llvmBuilder.add()
+                    "-" -> llvmBuilder.subtract()
+                }
+            } catch (e: MatchingOperatorNotFoundException) {
+                syntaxErrors.add(
+                    SyntaxErrorWithLineData(
+                        e.error,
+                        ctx.op
+                    )
+                )
             }
         }
     }

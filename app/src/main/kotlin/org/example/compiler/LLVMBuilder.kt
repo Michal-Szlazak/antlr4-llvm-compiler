@@ -1,5 +1,8 @@
 package org.example.compiler
 
+import org.example.compiler.error.MatchingOperatorNotFoundError
+import org.example.compiler.error.MatchingOperatorNotFoundException
+
 
 enum class Type(val typeName: String, val llvm: String, val size: Int) {
     I32("i32", "i32", 4),
@@ -83,22 +86,26 @@ class LLVMBuilder {
     }
 
     fun multiply(): LLVMBuilder {
-        return twoOperandOperation("mul nsw", "fmul")
+        return twoOperandOperation("*", "mul nsw", "fmul")
     }
 
     fun divide(): LLVMBuilder {
-        return twoOperandOperation("sdiv", "fdiv")
+        return twoOperandOperation("/", "sdiv", "fdiv")
     }
 
     fun add(): LLVMBuilder {
-        return twoOperandOperation("add nsw", "fadd")
+        return twoOperandOperation("+", "add nsw", "fadd")
     }
 
     fun subtract(): LLVMBuilder {
-        return twoOperandOperation("sub nsw", "fsub")
+        return twoOperandOperation("-", "sub nsw", "fsub")
     }
 
-    private fun twoOperandOperation(intCommandPrefix: String, floatCommandPrefix: String): LLVMBuilder {
+    private fun twoOperandOperation(
+        operator: String,
+        intCommandPrefix: String,
+        floatCommandPrefix: String
+    ): LLVMBuilder {
         val second = tempVariableStack.pop() ?: return this
         val first = tempVariableStack.pop() ?: return this
 
@@ -114,7 +121,13 @@ class LLVMBuilder {
             )
             tempVariableStack.push(Variable(instructionId, first.type))
         } else {
-            TODO()
+            throw MatchingOperatorNotFoundException(
+                MatchingOperatorNotFoundError(
+                    operator,
+                    first.type,
+                    second.type,
+                )
+            )
         }
 
         return this
