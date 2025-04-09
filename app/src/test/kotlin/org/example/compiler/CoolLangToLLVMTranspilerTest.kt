@@ -28,7 +28,7 @@ class CoolLangToLLVMTranspilerTest {
             i64 x;
             i64 y;
             
-            write (x) * ((y + x));
+            write (x + y) * x * ((y-x));
         """.trimIndent()
 
         val llvm = CoolLangToLLVMTranspiler().transpile(coolLangCode)
@@ -41,10 +41,14 @@ class CoolLangToLLVMTranspilerTest {
                 %2 = alloca i64, align 8
                 %3 = load i64, ptr %1, align 8
                 %4 = load i64, ptr %2, align 8
-                %5 = load i64, ptr %1, align 8
-                %6 = add nsw i64 %4, %5
-                %7 = mul nsw i64 %3, %6
-                %8 = call i32 (ptr, ...) @printf(ptr noundef @.str.1, i64 noundef %7)
+                %5 = add nsw i64 %3, %4
+                %6 = load i64, ptr %1, align 8
+                %7 = mul nsw i64 %5, %6
+                %8 = load i64, ptr %2, align 8
+                %9 = load i64, ptr %1, align 8
+                %10 = sub nsw i64 %8, %9
+                %11 = mul nsw i64 %7, %10
+                %12 = call i32 (ptr, ...) @printf(ptr noundef @.str.1, i64 noundef %11)
                 ret i32 0
             }
 

@@ -103,13 +103,15 @@ class LLVMBuilder {
         val first = tempVariableStack.pop() ?: return this
 
         if (first.type == second.type) {
-            val instructionId = if (first.type.isInt()) {
-                emitInstruction("$intCommandPrefix ${first.type.llvm} %${first.id}, %${second.id}")
-            } else if (first.type.isFloat()) {
-                emitInstruction("$floatCommandPrefix ${first.type.llvm} %${currentInstructionId - 2}, %${currentInstructionId - 1}")
-            } else {
-                error("There is currently no type which is neither int nor float")
-            }
+            val instructionId = emitInstruction(
+                "${
+                    when {
+                        first.type.isInt() -> intCommandPrefix
+                        second.type.isFloat() -> floatCommandPrefix
+                        else -> error("There is currently no type which is neither int nor float")
+                    }
+                } ${first.type.llvm} %${first.id}, %${second.id}"
+            )
             tempVariableStack.push(Variable(instructionId, first.type))
         } else {
             TODO()

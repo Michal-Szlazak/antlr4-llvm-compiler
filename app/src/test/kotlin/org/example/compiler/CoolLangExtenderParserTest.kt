@@ -133,7 +133,7 @@ class CoolLangExtenderParserTest {
                 f64 x;
                 f64 y;
                 
-                write x * (y + x);
+                write (x + y) * x * (y - x);
             """.trimIndent(),
             expectedTree = """
                 +- program
@@ -154,14 +154,25 @@ class CoolLangExtenderParserTest {
                       |  +- "write"
                       |  +- expression
                       |     +- expression
-                      |     |  +- "x"
+                      |     |  +- expression
+                      |     |  |  +- "("
+                      |     |  |  +- expression
+                      |     |  |  |  +- expression
+                      |     |  |  |  |  +- "x"
+                      |     |  |  |  +- "+"
+                      |     |  |  |  +- expression
+                      |     |  |  |     +- "y"
+                      |     |  |  +- ")"
+                      |     |  +- "*"
+                      |     |  +- expression
+                      |     |     +- "x"
                       |     +- "*"
                       |     +- expression
                       |        +- "("
                       |        +- expression
                       |        |  +- expression
                       |        |  |  +- "y"
-                      |        |  +- "+"
+                      |        |  +- "-"
                       |        |  +- expression
                       |        |     +- "x"
                       |        +- ")"
