@@ -1,6 +1,5 @@
 package org.example.compiler
 
-import org.example.compiler.error.*
 
 enum class Type(val typeName: String, val llvm: String, val size: Int) {
     I32("i32", "i32", 4),
@@ -9,7 +8,7 @@ enum class Type(val typeName: String, val llvm: String, val size: Int) {
     F64("f64", "double", 8);
 
     companion object {
-        fun fromTypeName(typeName: String): Type? {
+        fun fromTypeName(typeName: String?): Type? {
             return entries.firstOrNull { it.typeName == typeName }
         }
     }
@@ -27,7 +26,6 @@ data class StringRepresentation(val id: Int)
 class LLVMBuilder {
     private val statements = mutableSetOf<String>()
     private val operations = mutableSetOf<Operation>()
-    private val syntaxErrors = mutableListOf<SyntaxError>()
 
     private val constantStringToStringRepresentation = mutableMapOf<String, StringRepresentation>()
     private var currentConstantStringId = 1
@@ -35,18 +33,7 @@ class LLVMBuilder {
     private val variableNameToVariable = mutableMapOf<String, Variable>()
     private var currentInstructionId = 1
 
-    fun declaration(typeName: String, name: String): LLVMBuilder {
-        val errors = buildList {
-            if (Type.fromTypeName(typeName) == null) add(UndeclaredIdentifierError(typeName))
-            if (name in variableNameToVariable) add(RedefinitionError(name))
-        }
-        if (errors.isNotEmpty()) {
-            syntaxErrors.addAll(errors)
-            return this
-        }
-
-        val type = Type.fromTypeName(typeName)!!
-
+    fun declaration(type: Type, name: String): LLVMBuilder {
         val instructionId = emitInstruction("alloca ${type.llvm}, align ${type.size}")
         variableNameToVariable[name] = Variable(
             id = instructionId,
@@ -57,14 +44,6 @@ class LLVMBuilder {
     }
 
     fun read(variableName: String): LLVMBuilder {
-        val errors = buildList {
-            if (variableName !in variableNameToVariable) add(UndeclaredIdentifierError(variableName))
-        }
-        if(errors.isNotEmpty()) {
-            syntaxErrors.addAll(errors)
-            return this
-        }
-
         operations.add(Operation.READ)
 
         val variable = variableNameToVariable.getValue(variableName)
@@ -75,8 +54,6 @@ class LLVMBuilder {
     }
 
     fun writeVariable(variableName: String): LLVMBuilder {
-        require(variableNameToVariable.containsKey(variableName))
-
         operations.add(Operation.WRITE)
 
         val variable = variableNameToVariable.getValue(variableName)
@@ -131,10 +108,6 @@ class LLVMBuilder {
     }
 
     fun build(): String {
-        if(syntaxErrors.isNotEmpty()) {
-            throw InvalidSyntaxException(syntaxErrors)
-        }
-
         val sb = StringBuilder()
 
         sb.appendLine(constantStringToStringRepresentation.toList().joinToString("\n") { (string, representation) ->
@@ -152,6 +125,10 @@ class LLVMBuilder {
         sb.append("")
 
         return sb.toString()
+    }
+
+    fun doesVariableExist(variableName: String): Boolean {
+        return variableName in variableNameToVariable
     }
 
 }

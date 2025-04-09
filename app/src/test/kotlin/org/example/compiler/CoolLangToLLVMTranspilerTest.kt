@@ -11,14 +11,14 @@ class CoolLangToLLVMTranspilerTest {
     fun `redefining variable should throw exception`() {
         val coolLangCode = """
             i32 x;
-            read "XSDADS;
+            f32 x;
         """.trimIndent()
 
         val exception = assertFailsWith<InvalidSyntaxException> {
             CoolLangToLLVMTranspiler().transpile(coolLangCode)
         }
 
-        val actualSyntaxErrors = exception.syntaxErrors.map { it.message }
-        assertEquals(listOf(), actualSyntaxErrors)
+        val actualSyntaxErrors = exception.syntaxErrors.map { it.toString() }
+        assertEquals(listOf("line 2:4 redefinition of 'x'"), actualSyntaxErrors)
     }
 }
