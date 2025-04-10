@@ -121,6 +121,11 @@ class LLVMBuilder {
             )
             tempVariableStack.push(Variable(instructionId, first.type))
         } else {
+            if (first.type.isFloat() && second.type.isFloat()) {
+                if (first.type == Type.F32 && second.type == Type.F64) {
+
+                }
+            }
             throw MatchingOperatorNotFoundException(
                 MatchingOperatorNotFoundError(
                     operator,
@@ -191,21 +196,27 @@ class LLVMBuilder {
 
     fun writeLastCalculated(): LLVMBuilder {
         operations.add(Operation.WRITE)
-        val lastCalculated = tempVariableStack.pop() ?: return this
+        val lastCalculated = tempVariableStack.pop()?.let {
+            if (it.type.isFloat()) {
+                castVariableToType(it, Type.F64)
+            } else {
+                it
+            }
+        } ?: return this
 
-        // TODO: Maybe refactor when function calling will be handled?
-        if (lastCalculated.type == Type.F32) {
-            // According to Clang compiler implementation floats are extended to double for printf call
-            val extensionInstructionId =
-                emitInstruction("fpext float %${lastCalculated.id} to ${Type.F64.llvm}")
-            val constantStringId = addConstantString(createFormatForType(lastCalculated.type))
-            emitInstruction("call i32 (ptr, ...) @printf(ptr noundef $constantStringId, ${Type.F64.llvm} noundef %$extensionInstructionId)")
-        } else {
-            val constantStringId = addConstantString(createFormatForType(lastCalculated.type))
-            emitInstruction("call i32 (ptr, ...) @printf(ptr noundef $constantStringId, ${lastCalculated.type.llvm} noundef %${lastCalculated.id})")
-        }
+        val constantStringId = addConstantString(createFormatForType(lastCalculated.type))
+        emitInstruction("call i32 (ptr, ...) @printf(ptr noundef $constantStringId, ${lastCalculated.type.llvm} noundef %${lastCalculated.id})")
 
         return this
+    }
+
+    private fun castVariableToType(variable: Variable, to: Type): Variable {
+        if (variable.type == to) return variable
+
+        return Variable(
+            id = emitInstruction("fpext ${variable.type.llvm} %${variable.id} to ${to.llvm}"),
+            type = to,
+        )
     }
 
 }

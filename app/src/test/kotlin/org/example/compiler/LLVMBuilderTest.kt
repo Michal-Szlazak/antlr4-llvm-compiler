@@ -108,7 +108,7 @@ class LLVMBuilderTest {
                 %6 = call i32 (ptr, ...) @printf(ptr noundef @.str.1, double noundef %5)
                 %7 = load float, ptr %2, align 4
                 %8 = fpext float %7 to double
-                %9 = call i32 (ptr, ...) @printf(ptr noundef @.str.2, double noundef %8)
+                %9 = call i32 (ptr, ...) @printf(ptr noundef @.str.1, double noundef %8)
                 ret i32 0
             }
 
