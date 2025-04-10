@@ -106,34 +106,48 @@ class LLVMBuilder {
         intCommandPrefix: String,
         floatCommandPrefix: String
     ): LLVMBuilder {
-        val second = tempVariableStack.pop() ?: return this
-        val first = tempVariableStack.pop() ?: return this
+        var second = tempVariableStack.pop() ?: return this
+        var first = tempVariableStack.pop() ?: return this
 
-        if (first.type == second.type) {
-            val instructionId = emitInstruction(
-                "${
-                    when {
-                        first.type.isInt() -> intCommandPrefix
-                        second.type.isFloat() -> floatCommandPrefix
-                        else -> error("There is currently no type which is neither int nor float")
-                    }
-                } ${first.type.llvm} %${first.id}, %${second.id}"
-            )
-            tempVariableStack.push(Variable(instructionId, first.type))
-        } else {
-            if (first.type.isFloat() && second.type.isFloat()) {
-                if (first.type == Type.F32 && second.type == Type.F64) {
-
+        when {
+            first.type.isInt() && second.type.isInt() || first.type.isFloat() && second.type.isFloat() -> {
+                if (first.type.size < second.type.size) {
+                    first = castVariableToType(first, second.type)
+                } else if (first.type.size > second.type.size) {
+                    second = castVariableToType(second, first.type)
                 }
             }
-            throw MatchingOperatorNotFoundException(
-                MatchingOperatorNotFoundError(
-                    operator,
-                    first.type,
-                    second.type,
+
+            first.type.isInt() && second.type.isFloat() -> {
+                first = castVariableToType(first, second.type)
+            }
+
+            first.type.isFloat() && second.type.isInt() -> {
+                second = castVariableToType(second, first.type)
+            }
+
+            else -> if (first.type != second.type) {
+                throw MatchingOperatorNotFoundException(
+                    MatchingOperatorNotFoundError(
+                        operator,
+                        first.type,
+                        second.type,
+                    )
                 )
-            )
+            }
         }
+
+        assert(first.type == second.type) { "after casting both operands should be the same type" }
+        val instructionId = emitInstruction(
+            "${
+                when {
+                    first.type.isInt() -> intCommandPrefix
+                    second.type.isFloat() -> floatCommandPrefix
+                    else -> error("There is currently no type which is neither int nor float")
+                }
+            } ${first.type.llvm} %${first.id}, %${second.id}"
+        )
+        tempVariableStack.push(Variable(instructionId, first.type))
 
         return this
     }
@@ -157,8 +171,8 @@ class LLVMBuilder {
         return "@.str.${constantStringToStringRepresentation.getValue(string).id}"
     }
 
-    private fun emitInstruction(instruction: String, isVoid: Boolean = false): Int {
-        statements += if (isVoid) instruction else "%$currentInstructionId = $instruction"
+    private fun emitInstruction(instruction: String): Int {
+        statements += "%$currentInstructionId = $instruction"
         return currentInstructionId++
     }
 
@@ -214,7 +228,17 @@ class LLVMBuilder {
         if (variable.type == to) return variable
 
         return Variable(
-            id = emitInstruction("fpext ${variable.type.llvm} %${variable.id} to ${to.llvm}"),
+            id = emitInstruction(
+                "${
+                    when {
+                        variable.type.isInt() && to.isInt() -> "sext"
+                        variable.type.isFloat() && to.isFloat() -> "fpext"
+                        variable.type.isInt() && to.isFloat() -> "sitofp"
+                        variable.type.isFloat() && to.isInt() -> "fptosi"
+                        else -> error("unhandled variable combination")
+                    }
+                } ${variable.type.llvm} %${variable.id} to ${to.llvm}"
+            ),
             type = to,
         )
     }
