@@ -176,6 +176,10 @@ class LLVMBuilder {
         return currentInstructionId++
     }
 
+    private fun emitVoidInstruction(instruction: String) {
+        statements += instruction
+    }
+
     private fun createFormatForType(type: Type): String {
         return when (type) {
             Type.I32 -> "%d"
@@ -241,6 +245,21 @@ class LLVMBuilder {
             ),
             type = to,
         )
+    }
+
+    fun storeTo(variableName: String): LLVMBuilder {
+        val variable = variableNameToVariable.getValue(variableName)
+        val expressionResult = tempVariableStack.pop()?.let {
+            if (it.type != variable.type) {
+                castVariableToType(it, variable.type)
+            } else {
+                it
+            }
+        } ?: return this
+
+        emitVoidInstruction("store ${expressionResult.type.llvm} %${expressionResult.id}, ptr %${variable.id}, align ${variable.type.size}")
+
+        return this
     }
 
 }

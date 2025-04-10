@@ -98,4 +98,16 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
         }
     }
 
+    override fun exitAssignment(ctx: CoolLangParser.AssignmentContext) {
+        val idNode = ctx.ID() ?: return
+        if (!llvmBuilder.doesVariableExist(idNode.text)) {
+            syntaxErrors.add(
+                SyntaxErrorWithLineData(UndeclaredIdentifierError(idNode.text), idNode)
+            )
+            return
+        }
+
+        llvmBuilder.storeTo(idNode.text)
+    }
+
 }

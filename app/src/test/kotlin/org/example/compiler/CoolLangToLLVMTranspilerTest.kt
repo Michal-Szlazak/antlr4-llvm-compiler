@@ -66,7 +66,8 @@ class CoolLangToLLVMTranspilerTest {
             f64 a;
             f32 b;
             write a + b;
-            write a * x + b * x;
+            x = a * x + b * x;
+            write x;
         """.trimIndent()
 
         val llvm = CoolLangToLLVMTranspiler().transpile(coolLangCode)
@@ -74,6 +75,7 @@ class CoolLangToLLVMTranspilerTest {
         val expectedLLVM = """
             @.str.1 = private unnamed_addr constant [4 x i8] c"%ld\00", align 1
             @.str.2 = private unnamed_addr constant [4 x i8] c"%lf\00", align 1
+            @.str.3 = private unnamed_addr constant [3 x i8] c"%d\00", align 1
 
             define i32 @main() {
                 %1 = alloca i32, align 4
@@ -100,7 +102,10 @@ class CoolLangToLLVMTranspilerTest {
                 %22 = fmul float %19, %21
                 %23 = fpext float %22 to double
                 %24 = fadd double %18, %23
-                %25 = call i32 (ptr, ...) @printf(ptr noundef @.str.2, double noundef %24)
+                %25 = fptosi double %24 to i32
+                store i32 %25, ptr %1, align 4
+                %26 = load i32, ptr %1, align 4
+                %27 = call i32 (ptr, ...) @printf(ptr noundef @.str.3, i32 noundef %26)
                 ret i32 0
             }
 

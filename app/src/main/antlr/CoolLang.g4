@@ -2,13 +2,15 @@ grammar CoolLang;
 
 program : statement* ;
 
-statement : (declaration | writeOperation | readOperation) ';' ;
+statement : (declaration | writeOperation | readOperation | assignment) ';' ;
 
 declaration : type ID ;
 
 type : ID ;
 
 writeOperation : 'write' (expression | STRING) ;
+
+assignment: ID '=' expression;
 
 expression
     : expression op=('*'|'/') expression
