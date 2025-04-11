@@ -1,4 +1,3 @@
-i32 x;
 i64 y;
 f32 a;
 f32 b;
@@ -13,11 +12,13 @@ read a;
 write "x + y = ";
 write x + y;
 
-i32 b;
-b = x;
+write " x + y + 2.0 = ";
+write x + y + 2.0;
+
+b = x + 1;
 
 write " a + x = ";
-write a + c;
+write a + x;
 
 write " (a + b) * (x - y) = ";
-write (a + b) * (x - y);
+write (a + b) * (x - y) ;

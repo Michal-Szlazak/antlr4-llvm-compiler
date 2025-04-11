@@ -30,7 +30,23 @@ enum class Operation(val declaration: String) {
     WRITE("declare i32 @printf(ptr noundef, ...)"),
 }
 
-data class Variable(val id: Int, val type: Type)
+abstract class StackValue(val type: Type) {
+    open fun toValueString(): String {
+        error("should be overridden")
+    }
+}
+
+class Variable(val id: Int, type: Type) : StackValue(type) {
+    override fun toValueString(): String {
+        return "%${id}"
+    }
+}
+
+class Constant(type: Type, val value: String) : StackValue(type) {
+    override fun toValueString(): String {
+        return value
+    }
+}
 
 data class StringRepresentation(val id: Int)
 
@@ -43,7 +59,7 @@ class LLVMBuilder {
 
     private val variableNameToVariable = mutableMapOf<String, Variable>()
     private var currentInstructionId = 1
-    private val tempVariableStack = ArrayDeque<Variable>()
+    private val tempVariableStack = ArrayDeque<StackValue>()
     private fun <T> ArrayDeque<T>.push(element: T) = addLast(element)
     private fun <T> ArrayDeque<T>.pop() = removeLastOrNull()
 
@@ -101,6 +117,28 @@ class LLVMBuilder {
         return twoOperandOperation("-", "sub nsw", "fsub")
     }
 
+    fun loadIntToStack(value: String): LLVMBuilder {
+        tempVariableStack.push(
+            Constant(
+                type = Type.I32,
+                value = value,
+            )
+        )
+
+        return this
+    }
+
+    fun loadRealToStack(value: String): LLVMBuilder {
+        tempVariableStack.push(
+            Constant(
+                type = Type.F32,
+                value = value
+            )
+        )
+
+        return this
+    }
+
     private fun twoOperandOperation(
         operator: String,
         intCommandPrefix: String,
@@ -145,7 +183,7 @@ class LLVMBuilder {
                     second.type.isFloat() -> floatCommandPrefix
                     else -> error("There is currently no type which is neither int nor float")
                 }
-            } ${first.type.llvm} %${first.id}, %${second.id}"
+            } ${first.type.llvm} ${first.toValueString()}, ${second.toValueString()}"
         )
         tempVariableStack.push(Variable(instructionId, first.type))
 
@@ -223,25 +261,25 @@ class LLVMBuilder {
         } ?: return this
 
         val constantStringId = addConstantString(createFormatForType(lastCalculated.type))
-        emitInstruction("call i32 (ptr, ...) @printf(ptr noundef $constantStringId, ${lastCalculated.type.llvm} noundef %${lastCalculated.id})")
+        emitInstruction("call i32 (ptr, ...) @printf(ptr noundef $constantStringId, ${lastCalculated.type.llvm} noundef ${lastCalculated.toValueString()})")
 
         return this
     }
 
-    private fun castVariableToType(variable: Variable, to: Type): Variable {
-        if (variable.type == to) return variable
+    private fun castVariableToType(stackValue: StackValue, to: Type): StackValue {
+        if (stackValue.type == to) return stackValue
 
         return Variable(
             id = emitInstruction(
                 "${
                     when {
-                        variable.type.isInt() && to.isInt() -> "sext"
-                        variable.type.isFloat() && to.isFloat() -> "fpext"
-                        variable.type.isInt() && to.isFloat() -> "sitofp"
-                        variable.type.isFloat() && to.isInt() -> "fptosi"
+                        stackValue.type.isInt() && to.isInt() -> "sext"
+                        stackValue.type.isFloat() && to.isFloat() -> "fpext"
+                        stackValue.type.isInt() && to.isFloat() -> "sitofp"
+                        stackValue.type.isFloat() && to.isInt() -> "fptosi"
                         else -> error("unhandled variable combination")
                     }
-                } ${variable.type.llvm} %${variable.id} to ${to.llvm}"
+                } ${stackValue.type.llvm} ${stackValue.toValueString()} to ${to.llvm}"
             ),
             type = to,
         )
@@ -257,7 +295,7 @@ class LLVMBuilder {
             }
         } ?: return this
 
-        emitVoidInstruction("store ${expressionResult.type.llvm} %${expressionResult.id}, ptr %${variable.id}, align ${variable.type.size}")
+        emitVoidInstruction("store ${expressionResult.type.llvm} ${expressionResult.toValueString()}, ptr %${variable.id}, align ${variable.type.size}")
 
         return this
     }

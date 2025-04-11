@@ -95,6 +95,14 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
                     )
                 )
             }
+
+            ctx.REAL() != null -> {
+                llvmBuilder.loadRealToStack(ctx.REAL().text)
+            }
+
+            ctx.INT() != null -> {
+                llvmBuilder.loadIntToStack(ctx.INT().text)
+            }
         }
     }
 

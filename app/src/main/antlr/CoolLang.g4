@@ -17,6 +17,8 @@ expression
     | expression op=('+'|'-') expression
     | '(' expression ')'
     | ID
+    | INT
+    | REAL
     ;
 
 readOperation : 'read' ID ;
@@ -28,3 +30,7 @@ ID : [a-zA-Z]+ [a-zA-Z0-9]*;
 WS : [ \t\r\n]+ -> skip ;
 
 STRING : '"' (~["\r\n])* '"' ;
+
+INT : [+-]? [0-9]+ ;
+
+REAL : [0-9]+ '.' [0-9]+ ;
