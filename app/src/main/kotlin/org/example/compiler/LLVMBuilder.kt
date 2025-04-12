@@ -8,7 +8,8 @@ enum class Type(val typeName: String, val llvm: String, val size: Int) {
     I32("i32", "i32", 4),
     I64("i64", "i64", 8),
     F32("f32", "float", 4),
-    F64("f64", "double", 8);
+    F64("f64", "double", 8),
+    BOOL("bool", "i8", 1);
 
     companion object {
         fun fromTypeName(typeName: String?): Type? {
@@ -139,6 +140,17 @@ class LLVMBuilder {
         return this
     }
 
+    fun loadBooleanToStack(value: String): LLVMBuilder {
+        tempVariableStack.push(
+            Constant(
+                type = Type.BOOL,
+                value = value
+            )
+        )
+
+        return this
+    }
+
     private fun twoOperandOperation(
         operator: String,
         intCommandPrefix: String,
@@ -224,6 +236,7 @@ class LLVMBuilder {
             Type.I64 -> "%ld"
             Type.F32 -> "%f"
             Type.F64 -> "%lf"
+            Type.BOOL -> "%b"
         }
     }
 

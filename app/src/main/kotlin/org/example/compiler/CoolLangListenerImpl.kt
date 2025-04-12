@@ -106,6 +106,52 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
         }
     }
 
+    override fun exitBoolExpression(ctx: CoolLangParser.BoolExpressionContext?) {
+        super.exitBoolExpression(ctx)
+    }
+
+    override fun exitBoolOrExpr(ctx: CoolLangParser.BoolOrExprContext?) {
+        super.exitBoolOrExpr(ctx)
+    }
+
+    override fun exitBoolXorExpr(ctx: CoolLangParser.BoolXorExprContext?) {
+        super.exitBoolXorExpr(ctx)
+    }
+
+    override fun exitBoolAndExpr(ctx: CoolLangParser.BoolAndExprContext?) {
+        super.exitBoolAndExpr(ctx)
+    }
+
+    override fun exitBoolNotExpr(ctx: CoolLangParser.BoolNotExprContext?) {
+        super.exitBoolNotExpr(ctx)
+    }
+
+    override fun exitBoolPrimary(ctx: CoolLangParser.BoolPrimaryContext) {
+
+        when {
+
+            ctx.ID() != null -> if (llvmBuilder.doesVariableExist(ctx.ID().text)) {
+                llvmBuilder.loadVariableToStack(ctx.ID().text)
+            } else {
+                syntaxErrors.add(
+                    SyntaxErrorWithLineData(
+                        UndeclaredIdentifierError(ctx.ID().text),
+                        ctx.ID()
+                    )
+                )
+            }
+
+            ctx.boolean_() != null -> {
+                llvmBuilder.loadBooleanToStack(ctx.boolean_().text)
+            }
+
+            ctx.boolExpression() != null -> {
+                //TODO
+            }
+        }
+
+    }
+
     override fun exitAssignment(ctx: CoolLangParser.AssignmentContext) {
         val idNode = ctx.ID() ?: return
         if (!llvmBuilder.doesVariableExist(idNode.text)) {
