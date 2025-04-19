@@ -2,6 +2,7 @@ package org.example.compiler
 
 import CoolLangBaseListener
 import CoolLangParser
+import CoolLangParser.IfStatementContext
 import org.example.compiler.error.*
 
 class CoolLangListenerImpl : CoolLangBaseListener() {
@@ -18,6 +19,36 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
 
     override fun enterProgram(ctx: CoolLangParser.ProgramContext?) {
         llvmBuilder = LLVMBuilder()
+    }
+
+    override fun enterIfBody(ctx: CoolLangParser.IfBodyContext?) {
+        llvmBuilder.enterIfBody()
+    }
+
+    override fun exitLoopCondition(ctx: CoolLangParser.LoopConditionContext) {
+
+        when {
+            ctx.boolExpression() != null -> {
+
+            }
+
+            ctx.ID() != null -> {
+
+            }
+
+            ctx.INT() != null -> {
+
+            }
+        }
+    }
+    override fun exitLoopBody(ctx: CoolLangParser.LoopBodyContext) {
+
+
+
+    }
+
+    override fun exitIfBody(ctx: CoolLangParser.IfBodyContext?) {
+        llvmBuilder.exitIfBody()
     }
 
     override fun exitDeclaration(ctx: CoolLangParser.DeclarationContext) {
@@ -64,6 +95,10 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
             }
 
             ctx.STRING() != null -> llvmBuilder.writeString(ctx.STRING().text.trim('"'))
+
+            ctx.boolExpression() != null -> {
+                llvmBuilder.writeLastCalculated()
+            }
         }
     }
 
@@ -106,24 +141,33 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
         }
     }
 
-    override fun exitBoolExpression(ctx: CoolLangParser.BoolExpressionContext?) {
-        super.exitBoolExpression(ctx)
-    }
-
     override fun exitBoolOrExpr(ctx: CoolLangParser.BoolOrExprContext?) {
-        super.exitBoolOrExpr(ctx)
+
+        if (ctx == null) return
+        for (i in 1 until ctx.boolXorExpr().size) {
+            llvmBuilder.orBoolean()
+        }
     }
 
     override fun exitBoolXorExpr(ctx: CoolLangParser.BoolXorExprContext?) {
-        super.exitBoolXorExpr(ctx)
+        if (ctx == null) return
+        for (i in 1 until ctx.boolAndExpr().size) {
+            llvmBuilder.xorBoolean()
+        }
     }
 
     override fun exitBoolAndExpr(ctx: CoolLangParser.BoolAndExprContext?) {
-        super.exitBoolAndExpr(ctx)
+        if (ctx == null) return
+        for (i in 1 until ctx.boolNotExpr().size) {
+            llvmBuilder.andBoolean()
+        }
     }
 
     override fun exitBoolNotExpr(ctx: CoolLangParser.BoolNotExprContext?) {
-        super.exitBoolNotExpr(ctx)
+        if (ctx == null) return
+        if (ctx.getChildCount() == 2) {
+            llvmBuilder.negateBoolean()
+        }
     }
 
     override fun exitBoolPrimary(ctx: CoolLangParser.BoolPrimaryContext) {

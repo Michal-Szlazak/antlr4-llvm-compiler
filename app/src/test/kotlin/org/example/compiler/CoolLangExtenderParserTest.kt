@@ -20,6 +20,14 @@ class CoolLangExtenderParserTest {
                 write x;
                 write ", ";
                 write y;
+                
+                
+                bool x;
+                x = false;
+                bool y;
+                y = true;
+                
+                write ((x AND y) OR y);
             """.trimIndent(),
             expectedTree = """
                 +- program

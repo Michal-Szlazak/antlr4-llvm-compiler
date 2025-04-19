@@ -1,24 +1,14 @@
-i64 y;
-f32 a;
-f32 b;
 
-write "Podaj x: ";
-read x;
-write "Podaj y: ";
-read y;
-write "Podaj a: ";
-read a;
+bool x;
+x = true;
 
-write "x + y = ";
-write x + y;
+if(true) {
+    write x;
 
-write " x + y + 2.0 = ";
-write x + y + 2.0;
-
-b = x + 1;
-
-write " a + x = ";
-write a + x;
-
-write " (a + b) * (x - y) = ";
-write (a + b) * (x - y) ;
+    if(true) {
+        write "| habibi true |";
+    };
+    if(false) {
+        write "| habibi false |";
+    };
+};

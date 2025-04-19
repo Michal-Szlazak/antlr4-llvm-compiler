@@ -11,6 +11,7 @@ class LLVMCompiler {
 
         val llcCommand = listOf(
             "llc",
+            "-opaque-pointers",
             "-filetype=obj",
             llvmFile.absolutePath,
             "-o",

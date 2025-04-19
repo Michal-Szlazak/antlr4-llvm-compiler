@@ -9,7 +9,7 @@ enum class Type(val typeName: String, val llvm: String, val size: Int) {
     I64("i64", "i64", 8),
     F32("f32", "float", 4),
     F64("f64", "double", 8),
-    BOOL("bool", "i8", 1);
+    BOOL("bool", "i1", 1);
 
     companion object {
         fun fromTypeName(typeName: String?): Type? {
@@ -61,6 +61,8 @@ class LLVMBuilder {
     private val variableNameToVariable = mutableMapOf<String, Variable>()
     private var currentInstructionId = 1
     private val tempVariableStack = ArrayDeque<StackValue>()
+    private val brStack = ArrayDeque<Int>()
+    private var currentBr = 0
     private fun <T> ArrayDeque<T>.push(element: T) = addLast(element)
     private fun <T> ArrayDeque<T>.pop() = removeLastOrNull()
 
@@ -73,6 +75,36 @@ class LLVMBuilder {
 
         return this
     }
+
+    fun enterIfBody(): LLVMBuilder {
+        currentBr++
+        val lastCalculated = tempVariableStack.pop() ?: return this
+        emitVoidInstruction("br i1 ${lastCalculated.toValueString()}, label %true$currentBr, label %false$currentBr")
+        emitVoidInstruction("true$currentBr:")
+        brStack.push(currentBr)
+
+        return this
+    }
+
+    fun exitIfBody() {
+        val br = brStack.pop()
+        emitVoidInstruction("br label %false$br")
+        emitVoidInstruction("false$br:")
+    }
+
+    fun startLoopInt(n: String): LLVMBuilder {
+
+        val instructionId = emitInstruction("alloca ${Type.I32}, align ${Type.I32.size}")
+        emitVoidInstruction("store ${Type.I32} 0, ptr %${instructionId}, align ${Type.I32.size}") //move to external
+
+        currentBr++;
+        emitVoidInstruction("br label %cond$currentBr")
+        emitVoidInstruction("cond$currentBr:")
+
+        emitInstruction("load ${Type.I32}, ptr %${instructionId}")
+    }
+
+
 
     fun read(variableName: String): LLVMBuilder {
         operations.add(Operation.READ)
@@ -309,6 +341,59 @@ class LLVMBuilder {
         } ?: return this
 
         emitVoidInstruction("store ${expressionResult.type.llvm} ${expressionResult.toValueString()}, ptr %${variable.id}, align ${variable.type.size}")
+
+        return this
+    }
+
+    fun andBoolean(): LLVMBuilder {
+        val rhs = tempVariableStack.pop() ?: return this
+        val lhs = tempVariableStack.pop() ?: return this
+
+        require(lhs.type == Type.BOOL && rhs.type == Type.BOOL) {
+            "andBoolean expects two boolean operands"
+        }
+
+        val result = emitInstruction("and i1 ${lhs.toValueString()}, ${rhs.toValueString()}")
+        tempVariableStack.push(Variable(result, Type.BOOL))
+
+        return this
+    }
+    fun orBoolean(): LLVMBuilder {
+        val rhs = tempVariableStack.pop() ?: return this
+        val lhs = tempVariableStack.pop() ?: return this
+
+        require(lhs.type == Type.BOOL && rhs.type == Type.BOOL) {
+            "orBoolean expects two boolean operands"
+        }
+
+        val result = emitInstruction("or i1 ${lhs.toValueString()}, ${rhs.toValueString()}")
+        tempVariableStack.push(Variable(result, Type.BOOL))
+
+        return this
+    }
+    fun xorBoolean(): LLVMBuilder {
+        val rhs = tempVariableStack.pop() ?: return this
+        val lhs = tempVariableStack.pop() ?: return this
+
+        require(lhs.type == Type.BOOL && rhs.type == Type.BOOL) {
+            "xorBoolean expects two boolean operands"
+        }
+
+        val result = emitInstruction("xor i1 ${lhs.toValueString()}, ${rhs.toValueString()}")
+        tempVariableStack.push(Variable(result, Type.BOOL))
+
+        return this
+    }
+    fun negateBoolean(): LLVMBuilder {
+        val operand = tempVariableStack.pop() ?: return this
+
+        require(operand.type == Type.BOOL) {
+            "negateBoolean expects a boolean operand"
+        }
+
+        // Logical NOT: xor with 1
+        val result = emitInstruction("xor i1 ${operand.toValueString()}, 1")
+        tempVariableStack.push(Variable(result, Type.BOOL))
 
         return this
     }

@@ -38,6 +38,7 @@ class ArgsParser {
 
             return ParsedArgs(
                 codeFilename = codeFilename,
+
                 outputBinaryFilename = outputBinaryFilename ?: "cl.out",
                 outputLLVMFilename = outputLLVMFilename ?: "cl.ll",
             )

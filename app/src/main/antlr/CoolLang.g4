@@ -7,13 +7,22 @@ statement : (
     | writeOperation
     | readOperation
     | assignment
+    | ifStatement
+    | loopStatement
     ) ';' ;
+
+ifStatement: 'if' '(' boolExpression ')' '{' ifBody '}' ;
+ifBody: statement* ;
+
+loopStatement: 'loop' '(' loopCondition ')' '{' loopBody '}' ;
+loopCondition: boolExpression | ID | INT ;
+loopBody: statement* ;
 
 declaration : type ID ;
 
 type : ID ;
 
-writeOperation : 'write' (expression | STRING) ;
+writeOperation : 'write' (expression | STRING | boolExpression) ;
 
 assignment: ID '=' (expression | boolExpression);
 
@@ -55,6 +64,13 @@ boolean : TRUE | FALSE;
 
 // Lexer Rules
 
+TRUE : 'true';
+FALSE : 'false';
+AND : 'AND' ;
+OR : 'OR' ;
+XOR : 'XOR' ;
+NEG : 'NEG' ;
+
 ID : [a-zA-Z]+ [a-zA-Z0-9]*;
 
 WS : [ \t\r\n]+ -> skip ;
@@ -64,10 +80,3 @@ STRING : '"' (~["\r\n])* '"' ;
 INT : [+-]? [0-9]+ ;
 
 REAL : [0-9]+ '.' [0-9]+ ;
-
-TRUE : 'true';
-FALSE : 'false';
-AND : 'AND' ;
-OR : 'OR' ;
-XOR : 'XOR' ;
-NEG : 'NEG' ;
