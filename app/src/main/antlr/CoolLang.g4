@@ -9,6 +9,8 @@ statement : (
     | assignment
     | ifStatement
     | loopStatement
+    | functionDeclaration
+    | functionCall
     ) ';' ;
 
 ifStatement: 'if' '(' boolExpression ')' '{' ifBody '}' ;
@@ -22,6 +24,8 @@ functionDeclaration: 'fun' functionName '{' functionBody '}' ;
 
 functionName: ID ;
 functionBody: statement* ;
+
+functionCall: 'call' ID ;
 
 declaration : type ID ;
 

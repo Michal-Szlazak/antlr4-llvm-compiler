@@ -24,11 +24,24 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
         llvmBuilder = LLVMBuilder()
     }
 
+    override fun exitProgram(ctx: CoolLangParser.ProgramContext) {
+        llvmBuilder.closeMain()
+    }
+
     override fun exitFunctionName(ctx: CoolLangParser.FunctionNameContext) {
         val name = ctx.ID().text
         functions.add(name)
         function = name
         llvmBuilder.functionStart(name)
+    }
+
+    override fun exitFunctionCall(ctx: CoolLangParser.FunctionCallContext) {
+        llvmBuilder.functionCall(ctx.ID().text)
+    }
+
+    override fun exitFunctionBody(ctx: CoolLangParser.FunctionBodyContext) {
+
+        llvmBuilder.functionEnd(function)
     }
 
     override fun enterIfBody(ctx: CoolLangParser.IfBodyContext?) {

@@ -1,14 +1,9 @@
 
-bool x;
-x = true;
+i32 x;
+x = 2;
 
-if(true) {
-    write x;
-
-    if(true) {
-        write "| habibi true |";
-    };
-    if(false) {
-        write "| habibi false |";
-    };
+fun habibi {
+    write "habibi";
 };
+
+call habibi;

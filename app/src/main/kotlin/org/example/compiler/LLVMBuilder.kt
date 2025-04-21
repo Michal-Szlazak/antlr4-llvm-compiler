@@ -52,18 +52,21 @@ class Constant(type: Type, val value: String) : StackValue(type) {
 data class StringRepresentation(val id: Int)
 
 class LLVMBuilder {
+    private val statementsMain = mutableListOf<String>()
     private val statements = mutableListOf<String>()
     private val operations = mutableSetOf<Operation>()
+    private val headers = mutableListOf<String>()
 
     private val constantStringToStringRepresentation = mutableMapOf<String, StringRepresentation>()
     private var currentConstantStringId = 1
 
     private val variableNameToVariable = mutableMapOf<String, Variable>()
     private var currentInstructionId = 1
+    private var mainCurrentInstructionId = 1
+
+
     private val tempVariableStack = ArrayDeque<StackValue>()
     private val brStack = ArrayDeque<Int>()
-    private var tmp = 1;
-    private var mainTmp = 1;
     private var currentBr = 0
     private fun <T> ArrayDeque<T>.push(element: T) = addLast(element)
     private fun <T> ArrayDeque<T>.pop() = removeLastOrNull()
@@ -80,7 +83,31 @@ class LLVMBuilder {
 
     fun functionStart(funName: String) {
 
+        statementsMain.addAll(statements)
 
+        mainCurrentInstructionId = currentInstructionId
+
+        statements.clear()
+
+        emitVoidInstruction("define i32 @$funName() nounwind {\n")
+        currentInstructionId = 1
+    }
+
+    fun functionEnd(funName: String) {
+
+        emitVoidInstruction("ret i32 %${currentInstructionId-1}\n}\n")
+        headers.addAll(statements)
+        statements.clear()
+        currentInstructionId = mainCurrentInstructionId
+    }
+
+    fun closeMain() {
+
+        statementsMain.addAll(statements)
+    }
+
+    fun functionCall(funName: String) {
+        emitInstruction("call i32 @$funName()")
     }
 
     fun enterIfBody(): LLVMBuilder {
@@ -327,12 +354,15 @@ class LLVMBuilder {
         })
         sb.appendLine()
 
+        sb.appendLine(headers.joinToString("\n"))
+
         sb.appendLine("define i32 @main() {")
-        sb.appendLine((statements + "ret i32 0").joinToString("\n") {
+        sb.appendLine((statementsMain + "ret i32 0").joinToString("\n") {
             "${" ".repeat(4)}$it"
         })
         sb.appendLine("}")
         sb.appendLine()
+
         sb.append(operations.joinToString("\n") { it.declaration })
 
         return sb.toString()
