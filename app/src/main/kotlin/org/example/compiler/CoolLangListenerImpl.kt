@@ -10,6 +10,9 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
     private lateinit var llvmBuilder: LLVMBuilder
     private val syntaxErrors = mutableListOf<SyntaxErrorWithLineData>()
 
+    private val functions = mutableSetOf<String>()
+    var function: String = ""
+
     fun getLLVM(): String {
         if (syntaxErrors.isNotEmpty()) {
             throw InvalidSyntaxException(syntaxErrors)
@@ -21,6 +24,13 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
         llvmBuilder = LLVMBuilder()
     }
 
+    override fun exitFunctionName(ctx: CoolLangParser.FunctionNameContext) {
+        val name = ctx.ID().text
+        functions.add(name)
+        function = name
+        llvmBuilder.functionStart(name)
+    }
+
     override fun enterIfBody(ctx: CoolLangParser.IfBodyContext?) {
         llvmBuilder.enterIfBody()
     }
@@ -29,22 +39,21 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
 
         when {
             ctx.boolExpression() != null -> {
-
+                TODO()
             }
 
             ctx.ID() != null -> {
-
+                llvmBuilder.startLoopVariable(ctx.ID().text)
             }
 
             ctx.INT() != null -> {
-
+                llvmBuilder.startLoopInt(ctx.INT().text)
             }
         }
     }
     override fun exitLoopBody(ctx: CoolLangParser.LoopBodyContext) {
 
-
-
+        llvmBuilder.endLoopInt()
     }
 
     override fun exitIfBody(ctx: CoolLangParser.IfBodyContext?) {

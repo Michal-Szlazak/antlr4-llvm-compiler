@@ -52,7 +52,7 @@ class Constant(type: Type, val value: String) : StackValue(type) {
 data class StringRepresentation(val id: Int)
 
 class LLVMBuilder {
-    private val statements = mutableSetOf<String>()
+    private val statements = mutableListOf<String>()
     private val operations = mutableSetOf<Operation>()
 
     private val constantStringToStringRepresentation = mutableMapOf<String, StringRepresentation>()
@@ -62,6 +62,8 @@ class LLVMBuilder {
     private var currentInstructionId = 1
     private val tempVariableStack = ArrayDeque<StackValue>()
     private val brStack = ArrayDeque<Int>()
+    private var tmp = 1;
+    private var mainTmp = 1;
     private var currentBr = 0
     private fun <T> ArrayDeque<T>.push(element: T) = addLast(element)
     private fun <T> ArrayDeque<T>.pop() = removeLastOrNull()
@@ -74,6 +76,11 @@ class LLVMBuilder {
         )
 
         return this
+    }
+
+    fun functionStart(funName: String) {
+
+
     }
 
     fun enterIfBody(): LLVMBuilder {
@@ -92,16 +99,56 @@ class LLVMBuilder {
         emitVoidInstruction("false$br:")
     }
 
-    fun startLoopInt(n: String): LLVMBuilder {
+    fun startLoopInt(repetitions: String): LLVMBuilder {
 
-        val instructionId = emitInstruction("alloca ${Type.I32}, align ${Type.I32.size}")
-        emitVoidInstruction("store ${Type.I32} 0, ptr %${instructionId}, align ${Type.I32.size}") //move to external
+        // Step 1: Allocate and initialize the loop counter (let's call it %tmp)
+        val tmpId = emitInstruction("alloca i32, align 4")
+        emitVoidInstruction("store i32 0, ptr %$tmpId, align 4")
 
-        currentBr++;
-        emitVoidInstruction("br label %cond$currentBr")
-        emitVoidInstruction("cond$currentBr:")
+        // Step 2: Create a new branch label for the loop condition
+        currentBr++
+        val loopBr = currentBr
 
-        emitInstruction("load ${Type.I32}, ptr %${instructionId}")
+        emitVoidInstruction("br label %cond$loopBr")
+        emitVoidInstruction("cond$loopBr:")
+
+        // Step 3: Load loop counter
+        val loadedTmpId = emitInstruction("load i32, ptr %$tmpId, align 4")
+
+        // Step 4: Increment the loop counter
+        val oneConstId = emitInstruction("add nsw i32 %$loadedTmpId, 1")
+
+        // Step 5: Store the incremented counter back
+        emitVoidInstruction("store i32 %$oneConstId, ptr %$tmpId, align 4")
+
+        // Step 6: Compare old counter value with `repetitions`
+        val comparisonId = emitInstruction("icmp slt i32 %$loadedTmpId, $repetitions")
+
+        // Step 7: Emit the conditional branch
+        emitVoidInstruction("br i1 %$comparisonId, label %true$loopBr, label %false$loopBr")
+        emitVoidInstruction("true$loopBr:")
+
+        // Step 8: Push the branch number to stack for later use
+        brStack.push(loopBr)
+
+        return this
+    }
+
+    fun startLoopVariable(variable: String): LLVMBuilder {
+
+        this.loadVariableToStack(variable)
+        val lastCalculated = tempVariableStack.pop()
+        val repetitions = lastCalculated!!.toValueString()
+
+        this.startLoopInt(repetitions)
+
+        return this
+    }
+
+    fun endLoopInt() {
+        val b = brStack.pop()
+        emitVoidInstruction("br label %cond$b")
+        emitVoidInstruction("false$b:")
     }
 
 

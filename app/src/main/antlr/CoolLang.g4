@@ -18,6 +18,11 @@ loopStatement: 'loop' '(' loopCondition ')' '{' loopBody '}' ;
 loopCondition: boolExpression | ID | INT ;
 loopBody: statement* ;
 
+functionDeclaration: 'fun' functionName '{' functionBody '}' ;
+
+functionName: ID ;
+functionBody: statement* ;
+
 declaration : type ID ;
 
 type : ID ;
