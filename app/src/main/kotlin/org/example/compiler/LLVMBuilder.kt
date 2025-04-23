@@ -4,12 +4,12 @@ import org.example.compiler.error.MatchingOperatorNotFoundError
 import org.example.compiler.error.MatchingOperatorNotFoundException
 
 
-enum class Type(val typeName: String, val llvm: String, val size: Int) {
-    I32("i32", "i32", 4),
-    I64("i64", "i64", 8),
-    F32("f32", "float", 4),
-    F64("f64", "double", 8),
-    BOOL("bool", "i1", 1);
+enum class Type(val typeName: String, val llvm: String, val size: Int, val default: String) {
+    I32("i32", "i32", 4, "0"),
+    I64("i64", "i64", 8, "0.0"),
+    F32("f32", "float", 4, "0.0"),
+    F64("f64", "double", 8, "0.0"),
+    BOOL("bool", "i1", 1, "false");
 
     companion object {
         fun fromTypeName(typeName: String?): Type? {
@@ -24,6 +24,10 @@ enum class Type(val typeName: String, val llvm: String, val size: Int) {
     fun isInt(): Boolean {
         return this in listOf(I32, I64)
     }
+
+    fun isBoolean(): Boolean {
+        return this in listOf(BOOL)
+    }
 }
 
 enum class Operation(val declaration: String) {
@@ -37,7 +41,8 @@ abstract class StackValue(val type: Type) {
     }
 }
 
-class Variable(val id: Int, type: Type) : StackValue(type) {
+class Variable(val id: Int, type: Type, val isGlobal: Boolean) : StackValue(type) {
+
     override fun toValueString(): String {
         return "%${id}"
     }
@@ -71,14 +76,33 @@ class LLVMBuilder {
     private fun <T> ArrayDeque<T>.push(element: T) = addLast(element)
     private fun <T> ArrayDeque<T>.pop() = removeLastOrNull()
 
-    fun declaration(type: Type, name: String): LLVMBuilder {
-        val instructionId = emitInstruction("alloca ${type.llvm}, align ${type.size}")
-        variableNameToVariable[name] = Variable(
-            id = instructionId,
-            type = type,
-        )
+    fun declaration(type: Type, name: String, global: Boolean): LLVMBuilder {
+
+        if(global) {
+            val instructionId = emitGlobalVariable(type)
+            variableNameToVariable[name] = Variable(
+                id = instructionId,
+                type = type,
+                isGlobal = true
+            )
+
+        } else {
+
+            val instructionId = emitInstruction("alloca ${type.llvm}, align ${type.size}")
+            variableNameToVariable[name] = Variable(
+                id = instructionId,
+                type = type,
+                isGlobal = false
+            )
+
+        }
 
         return this
+    }
+
+    fun emitGlobalVariable(type: Type): Int {
+        headers += "@.global.$currentInstructionId = global ${type.llvm} ${type.default}"
+        return currentInstructionId++
     }
 
     fun functionStart(funName: String) {
@@ -161,13 +185,43 @@ class LLVMBuilder {
         return this
     }
 
-    fun startLoopVariable(variable: String): LLVMBuilder {
+    fun startLoopVariable(variable: String, global: Boolean): LLVMBuilder {
 
-        this.loadVariableToStack(variable)
+        this.loadVariableToStack(variable, global)
         val lastCalculated = tempVariableStack.pop()
-        val repetitions = lastCalculated!!.toValueString()
 
-        this.startLoopInt(repetitions)
+        if(lastCalculated!!.type.isInt()) {
+            val repetitions = lastCalculated.toValueString()
+            this.startLoopInt(repetitions)
+        } else if(lastCalculated!!.type.isBoolean()) {
+            tempVariableStack.push(lastCalculated)
+            startLoopBoolExpression()
+        } else {
+            TODO()
+        }
+
+        return this
+    }
+
+    fun startLoopBoolExpression(): LLVMBuilder {
+
+        currentBr++
+        val loopBr = currentBr
+
+        emitVoidInstruction("br label %cond$loopBr")
+        emitVoidInstruction("cond$loopBr:")
+
+        // Step 2: Evaluate the boolean expression (assumes it's already loaded)
+        val condition = tempVariableStack.pop()?.toValueString() ?: error("No boolean condition found on stack")
+
+        // Step 3: Branch based on the condition
+        emitVoidInstruction("br i1 $condition, label %true$loopBr, label %false$loopBr")
+
+        // Step 4: Emit true branch label (i.e., loop body entry)
+        emitVoidInstruction("true$loopBr:")
+
+        // Step 5: Push branch ID to stack for endLoop handling
+        brStack.push(loopBr)
 
         return this
     }
@@ -190,20 +244,34 @@ class LLVMBuilder {
         return this
     }
 
-    fun writeVariable(variableName: String): LLVMBuilder {
-        operations.add(Operation.WRITE)
+//    fun writeVariable(variableName: String): LLVMBuilder {
+//        operations.add(Operation.WRITE)
+//
+//        loadVariableToStack(variableName)
+//        writeLastCalculated()
+//
+//        return this
+//    }
 
-        loadVariableToStack(variableName)
-        writeLastCalculated()
+    fun loadVariableToStack(variableName: String, global: Boolean): LLVMBuilder {
 
-        return this
-    }
-
-    fun loadVariableToStack(variableName: String): LLVMBuilder {
         val variable = variableNameToVariable.getValue(variableName)
-        val instructionId =
-            emitInstruction("load ${variable.type.llvm}, ptr %${variable.id}, align ${variable.type.size}")
-        tempVariableStack.push(Variable(instructionId, variable.type))
+
+        if(variable.isGlobal) {
+
+            val instructionId =
+                emitInstruction("load ${variable.type.llvm}, ptr @.global.${variable.id}, align ${variable.type.size}")
+            tempVariableStack.push(Variable(instructionId, variable.type, variable.isGlobal))
+        } else {
+
+            val variable = variableNameToVariable.getValue(variableName)
+            val instructionId =
+                emitInstruction("load ${variable.type.llvm}, ptr %${variable.id}, align ${variable.type.size}")
+            tempVariableStack.push(Variable(instructionId, variable.type, variable.isGlobal))
+        }
+
+
+
 
         return this
     }
@@ -303,7 +371,7 @@ class LLVMBuilder {
                 }
             } ${first.type.llvm} ${first.toValueString()}, ${second.toValueString()}"
         )
-        tempVariableStack.push(Variable(instructionId, first.type))
+        tempVariableStack.push(Variable(instructionId, first.type, false))
 
         return this
     }
@@ -350,7 +418,7 @@ class LLVMBuilder {
         val sb = StringBuilder()
 
         sb.appendLine(constantStringToStringRepresentation.toList().joinToString("\n") { (string, representation) ->
-            "@.str.${representation.id} = private unnamed_addr constant [${string.length + 1} x i8] c\"$string\\00\", align 1"
+            "@.str.${representation.id} = private unnamed_addr constant [${string.length + 2} x i8] c\"$string\\0A\\00\", align 1"
         })
         sb.appendLine()
 
@@ -404,6 +472,7 @@ class LLVMBuilder {
                 } ${stackValue.type.llvm} ${stackValue.toValueString()} to ${to.llvm}"
             ),
             type = to,
+            isGlobal = false //TODO
         )
     }
 
@@ -422,6 +491,22 @@ class LLVMBuilder {
         return this
     }
 
+    fun storeToGlobal(variableName: String): LLVMBuilder {
+        val variable = variableNameToVariable.getValue(variableName)
+        val expressionResult = tempVariableStack.pop()?.let {
+
+            if (it.type != variable.type) {
+                castVariableToType(it, variable.type)
+            } else {
+                it
+            }
+        } ?: return this
+
+        emitVoidInstruction("store ${expressionResult.type.llvm} ${expressionResult.toValueString()}, ptr @.global.${variable.id}, align ${variable.type.size}")
+
+        return this
+    }
+
     fun andBoolean(): LLVMBuilder {
         val rhs = tempVariableStack.pop() ?: return this
         val lhs = tempVariableStack.pop() ?: return this
@@ -431,7 +516,7 @@ class LLVMBuilder {
         }
 
         val result = emitInstruction("and i1 ${lhs.toValueString()}, ${rhs.toValueString()}")
-        tempVariableStack.push(Variable(result, Type.BOOL))
+        tempVariableStack.push(Variable(result, Type.BOOL,false))
 
         return this
     }
@@ -444,7 +529,7 @@ class LLVMBuilder {
         }
 
         val result = emitInstruction("or i1 ${lhs.toValueString()}, ${rhs.toValueString()}")
-        tempVariableStack.push(Variable(result, Type.BOOL))
+        tempVariableStack.push(Variable(result, Type.BOOL, false))
 
         return this
     }
@@ -457,7 +542,7 @@ class LLVMBuilder {
         }
 
         val result = emitInstruction("xor i1 ${lhs.toValueString()}, ${rhs.toValueString()}")
-        tempVariableStack.push(Variable(result, Type.BOOL))
+        tempVariableStack.push(Variable(result, Type.BOOL, false))
 
         return this
     }
@@ -470,7 +555,7 @@ class LLVMBuilder {
 
         // Logical NOT: xor with 1
         val result = emitInstruction("xor i1 ${operand.toValueString()}, 1")
-        tempVariableStack.push(Variable(result, Type.BOOL))
+        tempVariableStack.push(Variable(result, Type.BOOL, false))
 
         return this
     }

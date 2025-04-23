@@ -17,7 +17,7 @@ ifStatement: 'if' '(' boolExpression ')' '{' ifBody '}' ;
 ifBody: statement* ;
 
 loopStatement: 'loop' '(' loopCondition ')' '{' loopBody '}' ;
-loopCondition: boolExpression | ID | INT ;
+loopCondition: ID | boolExpression | INT ;
 loopBody: statement* ;
 
 functionDeclaration: 'fun' functionName '{' functionBody '}' ;

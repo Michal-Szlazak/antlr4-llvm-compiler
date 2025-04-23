@@ -12,6 +12,7 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
 
     private val functions = mutableSetOf<String>()
     var function: String = ""
+    var global: Boolean = true
 
     fun getLLVM(): String {
         if (syntaxErrors.isNotEmpty()) {
@@ -21,6 +22,7 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
     }
 
     override fun enterProgram(ctx: CoolLangParser.ProgramContext?) {
+        global = true
         llvmBuilder = LLVMBuilder()
     }
 
@@ -33,6 +35,8 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
         functions.add(name)
         function = name
         llvmBuilder.functionStart(name)
+
+        global = false
     }
 
     override fun exitFunctionCall(ctx: CoolLangParser.FunctionCallContext) {
@@ -42,6 +46,7 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
     override fun exitFunctionBody(ctx: CoolLangParser.FunctionBodyContext) {
 
         llvmBuilder.functionEnd(function)
+        global = true
     }
 
     override fun enterIfBody(ctx: CoolLangParser.IfBodyContext?) {
@@ -52,11 +57,11 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
 
         when {
             ctx.boolExpression() != null -> {
-                TODO()
+                llvmBuilder.startLoopBoolExpression()
             }
 
             ctx.ID() != null -> {
-                llvmBuilder.startLoopVariable(ctx.ID().text)
+                llvmBuilder.startLoopVariable(ctx.ID().text, global)
             }
 
             ctx.INT() != null -> {
@@ -97,6 +102,7 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
         llvmBuilder.declaration(
             type,
             idNode.text,
+            global
         )
     }
 
@@ -127,7 +133,7 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
     override fun exitExpression(ctx: CoolLangParser.ExpressionContext) {
         when {
             ctx.ID() != null -> if (llvmBuilder.doesVariableExist(ctx.ID().text)) {
-                llvmBuilder.loadVariableToStack(ctx.ID().text)
+                llvmBuilder.loadVariableToStack(ctx.ID().text, global)
             } else {
                 syntaxErrors.add(
                     SyntaxErrorWithLineData(
@@ -197,7 +203,7 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
         when {
 
             ctx.ID() != null -> if (llvmBuilder.doesVariableExist(ctx.ID().text)) {
-                llvmBuilder.loadVariableToStack(ctx.ID().text)
+                llvmBuilder.loadVariableToStack(ctx.ID().text, global)
             } else {
                 syntaxErrors.add(
                     SyntaxErrorWithLineData(
@@ -227,7 +233,11 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
             return
         }
 
-        llvmBuilder.storeTo(idNode.text)
+        if(global) {
+            llvmBuilder.storeToGlobal(idNode.text)
+        } else {
+            llvmBuilder.storeTo(idNode.text)
+        }
     }
 
 }
