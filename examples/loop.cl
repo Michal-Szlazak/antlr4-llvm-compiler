@@ -10,9 +10,6 @@ loop(x) {
     write "loop(x) x = 3";
 };
 
-bool x;
-x = true;
-
 loop(false) {
     write "loop(false)";
 };

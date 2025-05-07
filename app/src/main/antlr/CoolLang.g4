@@ -11,6 +11,9 @@ statement : (
     | loopStatement
     | functionDeclaration
     | functionCall
+    | structDeclaration
+    | struct
+    | structVariableAssignment
     ) ';' ;
 
 ifStatement: 'if' '(' boolExpression ')' '{' ifBody '}' ;
@@ -33,7 +36,18 @@ type : ID ;
 
 writeOperation : 'write' (expression | STRING | boolExpression) ;
 
+structDeclaration: 'struct' structName ID ;
+
+struct: 'struct' ID '{' (structVariableDeclaration ';')* '}' ;
+structVariableDeclaration: type ID ;
+
+structVariableCall: structName ':' structVariable ;
+structName: ID ;
+structVariable: ID ;
+
 assignment: ID '=' (expression | boolExpression);
+
+structVariableAssignment: structVariableCall '=' (expression | boolExpression);
 
 expression: expression op=('*'|'/') expression
     | expression op=('+'|'-') expression
@@ -41,6 +55,7 @@ expression: expression op=('*'|'/') expression
     | ID
     | INT
     | REAL
+    | structVariableCall
     ;
 
 boolExpression
@@ -64,7 +79,11 @@ boolNotExpr
     | boolPrimary
     ;
 
-boolPrimary: '(' boolExpression ')' | boolean | ID;
+boolPrimary: '(' boolExpression ')'
+    | boolean
+    | ID
+    | structVariableCall
+    ;
 
 
 readOperation : 'read' ID ;

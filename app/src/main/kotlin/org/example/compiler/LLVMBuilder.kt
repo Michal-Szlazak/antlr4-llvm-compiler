@@ -1,7 +1,10 @@
 package org.example.compiler
 
+import org.antlr.v4.runtime.tree.TerminalNode
 import org.example.compiler.error.MatchingOperatorNotFoundError
 import org.example.compiler.error.MatchingOperatorNotFoundException
+import org.example.compiler.error.SyntaxErrorWithLineData
+import java.lang.Exception
 
 
 enum class Type(val typeName: String, val llvm: String, val size: Int, val default: String) {
@@ -9,7 +12,8 @@ enum class Type(val typeName: String, val llvm: String, val size: Int, val defau
     I64("i64", "i64", 8, "0.0"),
     F32("f32", "float", 4, "0.0"),
     F64("f64", "double", 8, "0.0"),
-    BOOL("bool", "i1", 1, "false");
+    BOOL("bool", "i1", 1, "false"),
+    STRUCT("struct", "", 0, "struct");
 
     companion object {
         fun fromTypeName(typeName: String?): Type? {
@@ -41,7 +45,7 @@ abstract class StackValue(val type: Type) {
     }
 }
 
-class Variable(val id: Int, type: Type, val isGlobal: Boolean) : StackValue(type) {
+class Variable(val id: Int, type: Type, val scope: String) : StackValue(type) {
 
     override fun toValueString(): String {
         return "%${id}"
@@ -54,18 +58,24 @@ class Constant(type: Type, val value: String) : StackValue(type) {
     }
 }
 
+class Struct(val name: String, val scope: String, val variables: List<Pair<String, Type>>)
 data class StringRepresentation(val id: Int)
 
 class LLVMBuilder {
+    private val MAIN_SCOPE = "main"
     private val statementsMain = mutableListOf<String>()
     private val statements = mutableListOf<String>()
     private val operations = mutableSetOf<Operation>()
     private val headers = mutableListOf<String>()
+    private val syntaxErrors = mutableListOf<SyntaxErrorWithLineData>()
+
+    private val structs = mutableMapOf<String, Struct>()
+    private val variableNameToStruct = mutableMapOf<Pair<String, String>, String>()
 
     private val constantStringToStringRepresentation = mutableMapOf<String, StringRepresentation>()
     private var currentConstantStringId = 1
 
-    private val variableNameToVariable = mutableMapOf<String, Variable>()
+    private val variableNameToVariable = mutableMapOf<Pair<String, String>, Variable>()
     private var currentInstructionId = 1
     private var mainCurrentInstructionId = 1
 
@@ -73,26 +83,179 @@ class LLVMBuilder {
     private val tempVariableStack = ArrayDeque<StackValue>()
     private val brStack = ArrayDeque<Int>()
     private var currentBr = 0
+
+    private var currentScope = "main"
+
     private fun <T> ArrayDeque<T>.push(element: T) = addLast(element)
     private fun <T> ArrayDeque<T>.pop() = removeLastOrNull()
+
+    fun setScope(scope: String) {
+        currentScope = scope
+    }
+
+    fun getSyntaxErrors(): MutableList<SyntaxErrorWithLineData> {
+        return syntaxErrors
+    }
+
+    fun declareStruct(name: String, variables: MutableList<Pair<String, Type>> ) {
+        var newHeader = "%$name = type {"
+
+        for(variable in variables) {
+            newHeader += " ${variable.second.llvm},"
+        }
+
+        newHeader = newHeader.substring(0, newHeader.length - 1) //delete last comma
+        newHeader += " } ;"
+
+        headers += newHeader
+
+        structs[name] = Struct(name, currentScope, variables)
+    }
+
+    fun getStructDefinition(structType: String): Struct? {
+
+        return structs[structType]
+    }
+
+    fun structVariableExists(structName: String): Boolean {
+        return structs[structName] != null
+    }
+
+    fun structDeclaration(structType: String, structName: String) {
+
+        //TODO delete - as the validation is in listenerImpl
+//        val struct = structs[structType]
+
+//        if(struct == null) {
+//
+//            syntaxErrors.add(
+//                SyntaxErrorWithLineData(
+//                "Undefined struct $structType", -1, -1
+//            ))
+//
+//            return
+//        }
+//
+//        if(struct.scope != currentScope && struct.scope != "main") {
+//            syntaxErrors.add(SyntaxErrorWithLineData(
+//                "Struct $structType is outside scope", -1, -1
+//            ))
+//
+//            return
+//        }
+
+        val instructionId: Int
+        if(currentScope == "main") {
+            instructionId = emitGlobalStructure(structType)
+        } else {
+            instructionId = emitInstruction("alloca %$structType")
+        }
+
+        variableNameToVariable[Pair(structName, currentScope)] = Variable(
+            instructionId,
+            Type.STRUCT,
+            currentScope
+        )
+        variableNameToStruct[Pair(structName, currentScope)] = structType
+    }
+
+    fun getIndexOfStructVariable(struct: Struct, variableName: String): Int? {
+
+        var i = 0
+
+        for(structVariable in struct.variables) {
+
+            if(structVariable.first == variableName) {
+                break
+            }
+            i++
+        }
+
+        if(i == struct.variables.size) {
+            return null
+        }
+        return i
+    }
+
+    fun structVariableAssignment(structName: String, struct: Struct, variableName: String, structVariableId: Int): LLVMBuilder {
+
+//        val structType = getStructTypeFromStructName(structName, currentScope)
+//        if(structType == null) {
+//            syntaxErrors.add(SyntaxErrorWithLineData(
+//                "Undeclared struct variable $structName", -1, -1
+//            ))
+//
+//            return this
+//        }
+
+//        val struct = structs[structType]
+//
+//        if(struct == null) {
+//            syntaxErrors.add(SyntaxErrorWithLineData(
+//                "Undefined struct $structType", -1, -1
+//            ))
+//
+//            return this
+//        }
+
+
+//
+//        var i = 0
+//
+//        for(structVariable in struct!!.variables) {
+//
+//            if(structVariable.first == variableName) {
+//                break
+//            }
+//            i++
+//        }
+//
+//        if(i == struct.variables.size) {
+//            syntaxErrors.add(SyntaxErrorWithLineData(
+//                "Undefined variable $variableName in struct $structName", -1, -1
+//            ))
+//        }
+
+        val variable = getVariableFromVariableName(structName, currentScope)
+        val structVariableType = struct.variables.get(structVariableId).second
+
+        var instructionId: Int
+
+        if(struct.scope == "main") {
+            instructionId = emitInstruction("getelementptr %${struct.name}, %${struct.name}* @.global.${variable!!.id}, i32 0, i32 $structVariableId ;")
+        } else {
+            instructionId = emitInstruction("getelementptr %${struct.name}, %${struct.name}* %${variable!!.id}, i32 0, i32 $structVariableId ;")
+        }
+
+        val expressionResult = tempVariableStack.pop()?.let {
+            if (it.type != structVariableType) {
+                castVariableToType(it, structVariableType)
+            } else {
+                it
+            }
+        } ?: return this
+
+        emitVoidInstruction("store ${expressionResult.type.llvm} ${expressionResult.toValueString()}, ${structVariableType.llvm}* %$instructionId")
+
+        return this
+    }
 
     fun declaration(type: Type, name: String, global: Boolean): LLVMBuilder {
 
         if(global) {
             val instructionId = emitGlobalVariable(type)
-            variableNameToVariable[name] = Variable(
+            variableNameToVariable[Pair(name, MAIN_SCOPE)] = Variable(
                 id = instructionId,
                 type = type,
-                isGlobal = true
+                currentScope
             )
 
         } else {
-
             val instructionId = emitInstruction("alloca ${type.llvm}, align ${type.size}")
-            variableNameToVariable[name] = Variable(
+            variableNameToVariable[Pair(name, currentScope)] = Variable(
                 id = instructionId,
                 type = type,
-                isGlobal = false
+                currentScope
             )
 
         }
@@ -102,6 +265,11 @@ class LLVMBuilder {
 
     fun emitGlobalVariable(type: Type): Int {
         headers += "@.global.$currentInstructionId = global ${type.llvm} ${type.default}"
+        return currentInstructionId++
+    }
+
+    fun emitGlobalStructure(structType: String): Int {
+        headers += "@.global.$currentInstructionId = global %$structType zeroinitializer"
         return currentInstructionId++
     }
 
@@ -117,9 +285,10 @@ class LLVMBuilder {
         currentInstructionId = 1
     }
 
-    fun functionEnd(funName: String) {
+    fun functionEnd() {
 
-        emitVoidInstruction("ret i32 %${currentInstructionId-1}\n}\n")
+//        emitVoidInstruction("ret i32 %${currentInstructionId-1}\n}\n")
+        emitVoidInstruction("ret i32 0\n}\n")
         headers.addAll(statements)
         statements.clear()
         currentInstructionId = mainCurrentInstructionId
@@ -185,9 +354,9 @@ class LLVMBuilder {
         return this
     }
 
-    fun startLoopVariable(variable: String, global: Boolean): LLVMBuilder {
+    fun startLoopVariable(variable: String): LLVMBuilder {
 
-        this.loadVariableToStack(variable, global)
+        this.loadVariableToStack(variable)
         val lastCalculated = tempVariableStack.pop()
 
         if(lastCalculated!!.type.isInt()) {
@@ -237,41 +406,100 @@ class LLVMBuilder {
     fun read(variableName: String): LLVMBuilder {
         operations.add(Operation.READ)
 
-        val variable = variableNameToVariable.getValue(variableName)
+        val variable = getVariableFromVariableName(variableName, currentScope) ?: return this
         val constantStringId = addConstantString(createFormatForType(variable.type))
         emitInstruction("call i32 (ptr, ...) @scanf(ptr noundef $constantStringId, ptr noundef %${variable.id})")
 
         return this
     }
 
-//    fun writeVariable(variableName: String): LLVMBuilder {
-//        operations.add(Operation.WRITE)
-//
-//        loadVariableToStack(variableName)
-//        writeLastCalculated()
-//
-//        return this
-//    }
+    fun getVariableType(variableName: String): Type? {
+        val variable = getVariableFromVariableName(variableName, currentScope) ?: return null
+        return variable.type
+    }
 
-    fun loadVariableToStack(variableName: String, global: Boolean): LLVMBuilder {
+    fun getVariable(variableName: String): Variable? {
+        return getVariableFromVariableName(variableName, currentScope)
+    }
 
-        val variable = variableNameToVariable.getValue(variableName)
+    fun loadVariableToStack(variableName: String): LLVMBuilder {
 
-        if(variable.isGlobal) {
+        val variable = getVariableFromVariableName(variableName, currentScope) ?: return this
+
+        if(variable.scope == "main") {
 
             val instructionId =
                 emitInstruction("load ${variable.type.llvm}, ptr @.global.${variable.id}, align ${variable.type.size}")
-            tempVariableStack.push(Variable(instructionId, variable.type, variable.isGlobal))
+            tempVariableStack.push(Variable(instructionId, variable.type, variable.scope))
         } else {
 
-            val variable = variableNameToVariable.getValue(variableName)
+//            if(variable.scope != currentScope) {
+//                syntaxErrors.add(
+//                    SyntaxErrorWithLineData(
+//                    "variable $variableName with scope ${variable.scope} cannot be used in $currentScope", -1, -1)
+//                )
+//            }
+
             val instructionId =
                 emitInstruction("load ${variable.type.llvm}, ptr %${variable.id}, align ${variable.type.size}")
-            tempVariableStack.push(Variable(instructionId, variable.type, variable.isGlobal))
+            tempVariableStack.push(Variable(instructionId, variable.type, variable.scope))
         }
 
+        return this
+    }
 
+    fun loadStructVariableToStack(structName: String, struct: Struct, structVariableIndex: Int): LLVMBuilder {
 
+//        val structType = getStructTypeFromStructName(structName, currentScope)
+//        if(structType == null) {
+//            syntaxErrors.add(SyntaxErrorWithLineData(
+//                "Undeclared struct variable $structName", -1, -1
+//            ))
+//
+//            return this
+//        }
+//
+//        val struct = structs[structType]
+//
+//        if(struct == null) {
+//            syntaxErrors.add(SyntaxErrorWithLineData(
+//                "Undefined struct $structType", -1, -1
+//            ))
+//
+//            return this
+//        }
+//
+////        val variable = variableNameToVariable[Pair(structName, currentScope)]
+//        var i = 0
+//
+//        for(structVariable in struct.variables) {
+//
+//            if(structVariable.first == variableName) {
+//                break
+//            }
+//            i++
+//        }
+//
+//        if(i == struct.variables.size) {
+//            syntaxErrors.add(SyntaxErrorWithLineData(
+//                "Undefined variable $variableName in struct $structName", -1, -1
+//            ))
+//        }
+
+        val variable = getVariableFromVariableName(structName, currentScope) ?: return this
+
+        val structVariableType = struct!!.variables.get(structVariableIndex).second
+
+        var instructionId: Int
+
+        if(struct.scope == "main") {
+            instructionId = emitInstruction("getelementptr %${struct.name}, %${struct.name}* @.global.${variable!!.id}, i32 0, i32 $structVariableIndex ;")
+        } else {
+            instructionId = emitInstruction("getelementptr %${struct.name}, %${struct.name}* %${variable!!.id}, i32 0, i32 $structVariableIndex ;")
+        }
+
+        instructionId = emitInstruction("load ${structVariableType.llvm}, ${structVariableType.llvm}* %$instructionId")
+        tempVariableStack.push(Variable(instructionId, structVariableType, variable.scope))
 
         return this
     }
@@ -371,7 +599,7 @@ class LLVMBuilder {
                 }
             } ${first.type.llvm} ${first.toValueString()}, ${second.toValueString()}"
         )
-        tempVariableStack.push(Variable(instructionId, first.type, false))
+        tempVariableStack.push(Variable(instructionId, first.type, currentScope))
 
         return this
     }
@@ -411,6 +639,7 @@ class LLVMBuilder {
             Type.F32 -> "%f"
             Type.F64 -> "%lf"
             Type.BOOL -> "%b"
+            Type.STRUCT -> "" //TODO
         }
     }
 
@@ -436,8 +665,14 @@ class LLVMBuilder {
         return sb.toString()
     }
 
-    fun doesVariableExist(variableName: String): Boolean {
-        return variableName in variableNameToVariable
+    fun doesVariableExist(variableName: String, scope: String): Boolean {
+
+        return getVariableFromVariableName(variableName, scope) != null
+    }
+
+    fun doesVariableExistInExactScope(variableName: String, scope: String): Boolean {
+
+        return Pair(variableName, scope) in variableNameToVariable
     }
 
     fun writeLastCalculated(): LLVMBuilder {
@@ -472,12 +707,13 @@ class LLVMBuilder {
                 } ${stackValue.type.llvm} ${stackValue.toValueString()} to ${to.llvm}"
             ),
             type = to,
-            isGlobal = false //TODO
+            currentScope
         )
     }
 
     fun storeTo(variableName: String): LLVMBuilder {
-        val variable = variableNameToVariable.getValue(variableName)
+
+        val variable = getVariableFromVariableName(variableName, currentScope) ?: return this
         val expressionResult = tempVariableStack.pop()?.let {
             if (it.type != variable.type) {
                 castVariableToType(it, variable.type)
@@ -486,23 +722,12 @@ class LLVMBuilder {
             }
         } ?: return this
 
-        emitVoidInstruction("store ${expressionResult.type.llvm} ${expressionResult.toValueString()}, ptr %${variable.id}, align ${variable.type.size}")
+        if (variable.scope == "main") {
+            emitVoidInstruction("store ${expressionResult.type.llvm} ${expressionResult.toValueString()}, ptr @.global.${variable.id}, align ${variable.type.size}")
+        } else {
+            emitVoidInstruction("store ${expressionResult.type.llvm} ${expressionResult.toValueString()}, ptr %${variable.id}, align ${variable.type.size}")
+        }
 
-        return this
-    }
-
-    fun storeToGlobal(variableName: String): LLVMBuilder {
-        val variable = variableNameToVariable.getValue(variableName)
-        val expressionResult = tempVariableStack.pop()?.let {
-
-            if (it.type != variable.type) {
-                castVariableToType(it, variable.type)
-            } else {
-                it
-            }
-        } ?: return this
-
-        emitVoidInstruction("store ${expressionResult.type.llvm} ${expressionResult.toValueString()}, ptr @.global.${variable.id}, align ${variable.type.size}")
 
         return this
     }
@@ -511,12 +736,16 @@ class LLVMBuilder {
         val rhs = tempVariableStack.pop() ?: return this
         val lhs = tempVariableStack.pop() ?: return this
 
-        require(lhs.type == Type.BOOL && rhs.type == Type.BOOL) {
-            "andBoolean expects two boolean operands"
+        if(lhs.type != Type.BOOL || rhs.type != Type.BOOL) {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+             "boolean AND operator does not support types ${rhs.type.name} AND ${lhs.type.name}", -1, -1
+            ))
+
+            return this
         }
 
         val result = emitInstruction("and i1 ${lhs.toValueString()}, ${rhs.toValueString()}")
-        tempVariableStack.push(Variable(result, Type.BOOL,false))
+        tempVariableStack.push(Variable(result, Type.BOOL, currentScope))
 
         return this
     }
@@ -524,12 +753,16 @@ class LLVMBuilder {
         val rhs = tempVariableStack.pop() ?: return this
         val lhs = tempVariableStack.pop() ?: return this
 
-        require(lhs.type == Type.BOOL && rhs.type == Type.BOOL) {
-            "orBoolean expects two boolean operands"
+        if(lhs.type != Type.BOOL || rhs.type != Type.BOOL) {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "boolean OR operator does not support types ${rhs.type.name} AND ${lhs.type.name}", -1, -1
+            ))
+
+            return this
         }
 
         val result = emitInstruction("or i1 ${lhs.toValueString()}, ${rhs.toValueString()}")
-        tempVariableStack.push(Variable(result, Type.BOOL, false))
+        tempVariableStack.push(Variable(result, Type.BOOL, currentScope))
 
         return this
     }
@@ -537,27 +770,61 @@ class LLVMBuilder {
         val rhs = tempVariableStack.pop() ?: return this
         val lhs = tempVariableStack.pop() ?: return this
 
-        require(lhs.type == Type.BOOL && rhs.type == Type.BOOL) {
-            "xorBoolean expects two boolean operands"
+        if(lhs.type != Type.BOOL || rhs.type != Type.BOOL) {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "boolean XOR operator does not support types ${rhs.type.name} AND ${lhs.type.name}", -1, -1
+            ))
+
+            return this
         }
 
         val result = emitInstruction("xor i1 ${lhs.toValueString()}, ${rhs.toValueString()}")
-        tempVariableStack.push(Variable(result, Type.BOOL, false))
+        tempVariableStack.push(Variable(result, Type.BOOL, currentScope))
 
         return this
     }
     fun negateBoolean(): LLVMBuilder {
         val operand = tempVariableStack.pop() ?: return this
 
-        require(operand.type == Type.BOOL) {
-            "negateBoolean expects a boolean operand"
+        if(operand.type != Type.BOOL) {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "boolean NEG operator does not support type ${operand.type.name}", -1, -1
+            ))
+
+            return this
         }
 
         // Logical NOT: xor with 1
         val result = emitInstruction("xor i1 ${operand.toValueString()}, 1")
-        tempVariableStack.push(Variable(result, Type.BOOL, false))
+        tempVariableStack.push(Variable(result, Type.BOOL, currentScope))
 
         return this
+    }
+
+    fun getVariableFromVariableName(variableName: String, currentScope: String): Variable? {
+
+        if(Pair(variableName, currentScope) in variableNameToVariable) {
+            return variableNameToVariable.getValue(Pair(variableName, currentScope))
+        }
+
+        if(Pair(variableName, MAIN_SCOPE) in variableNameToVariable) {
+            return variableNameToVariable.getValue(Pair(variableName, MAIN_SCOPE))
+        }
+
+        return null
+    }
+
+    fun getStructTypeFromStructName(structName: String, currentScope: String): String? {
+
+        if(Pair(structName, currentScope) in variableNameToStruct) {
+            return variableNameToStruct.get(Pair(structName, currentScope))
+        }
+
+        if(Pair(structName, MAIN_SCOPE) in variableNameToStruct) {
+            return variableNameToStruct.get(Pair(structName, MAIN_SCOPE))
+        }
+
+        return null
     }
 
 }

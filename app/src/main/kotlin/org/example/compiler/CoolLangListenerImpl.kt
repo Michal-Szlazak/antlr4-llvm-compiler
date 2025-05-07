@@ -2,28 +2,144 @@ package org.example.compiler
 
 import CoolLangBaseListener
 import CoolLangParser
-import CoolLangParser.IfStatementContext
 import org.example.compiler.error.*
+import java.util.ArrayDeque
 
 class CoolLangListenerImpl : CoolLangBaseListener() {
 
     private lateinit var llvmBuilder: LLVMBuilder
     private val syntaxErrors = mutableListOf<SyntaxErrorWithLineData>()
+    private val scopes = ArrayDeque<String>()
 
     private val functions = mutableSetOf<String>()
     var function: String = ""
-    var global: Boolean = true
+    var currentScope: String = "main"
 
     fun getLLVM(): String {
+
+        val llvmBuilderErrors = llvmBuilder.getSyntaxErrors()
+        syntaxErrors.addAll(llvmBuilderErrors)
+
         if (syntaxErrors.isNotEmpty()) {
             throw InvalidSyntaxException(syntaxErrors)
         }
+
         return llvmBuilder.build()
     }
 
+    override fun exitStruct(ctx: CoolLangParser.StructContext) {
+
+        val variables : MutableList<Pair<String, Type>> = ArrayList()
+
+        for(declarationCtx in ctx.structVariableDeclaration()) {
+            val typeNode = declarationCtx.type().ID()
+
+            val idNode = declarationCtx.ID()
+            val type = Type.fromTypeName(typeNode?.text)
+
+            variables.add(Pair(idNode.text, type!!))
+        }
+
+        llvmBuilder.declareStruct(
+            ctx.ID().text,
+            variables
+        )
+
+    }
+
+    override fun exitStructDeclaration(ctx: CoolLangParser.StructDeclarationContext) {
+
+        val struct = llvmBuilder.getStructDefinition(ctx.structName().ID().text)
+
+        if(struct == null) {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "Struct type ${ctx.structName().ID().text} does not exist",
+                ctx.structName().ID().symbol.line,
+                ctx.structName().ID().symbol.charPositionInLine
+            ))
+            return
+        } else if(struct.scope != currentScope && struct.scope != "main") {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "Struct type ${ctx.structName().ID().text}, defined in scope ${struct.scope} is outside of scope $currentScope",
+                ctx.structName().ID().symbol.line,
+                ctx.structName().ID().symbol.charPositionInLine
+            ))
+            return
+        }
+
+        if(llvmBuilder.doesVariableExistInExactScope(ctx.ID().text, currentScope)) {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "redefinition of '${ctx.ID().text}'",
+                ctx.structName().ID().symbol.line,
+                ctx.structName().ID().symbol.charPositionInLine
+            ))
+            return
+        }
+
+        llvmBuilder.structDeclaration(ctx.structName().ID().text, ctx.ID().text)
+    }
+
+    override fun exitStructVariableAssignment(ctx: CoolLangParser.StructVariableAssignmentContext) {
+
+        val structNameIdNode = ctx.structVariableCall().structName().ID()
+        val structVariableNameIdNode = ctx.structVariableCall().structVariable().ID()
+
+        val structType = llvmBuilder.getStructTypeFromStructName(
+            ctx.structVariableCall().structName().ID().text,
+            currentScope
+        )
+
+        if(structType == null) {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "Undeclared struct variable ${structNameIdNode.text}",
+                structNameIdNode.symbol.line,
+                structNameIdNode.symbol.charPositionInLine
+            ))
+
+            return
+        }
+
+        val struct = llvmBuilder.getStructDefinition(structType)
+
+        if(struct == null) {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "Struct type ${structNameIdNode.text} does not exist",
+                structNameIdNode.symbol.line,
+                structNameIdNode.symbol.charPositionInLine
+            ))
+            return
+        } else if(struct.scope != currentScope && struct.scope != "main") {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "Struct type ${structNameIdNode.text}, defined in scope ${struct.scope} is outside of scope $currentScope",
+                structNameIdNode.symbol.line,
+                structNameIdNode.symbol.charPositionInLine
+            ))
+            return
+        }
+
+        var structVariableIndex = llvmBuilder.getIndexOfStructVariable(struct, structVariableNameIdNode.text)
+
+        if(structVariableIndex == null) {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "Struct type ${structNameIdNode.text} does not have variable ${structVariableNameIdNode.text}",
+                structVariableNameIdNode.symbol.line,
+                structVariableNameIdNode.symbol.charPositionInLine
+            ))
+            return
+        }
+
+        llvmBuilder.structVariableAssignment(
+            structNameIdNode.text,
+            struct,
+            structVariableNameIdNode.text,
+            structVariableIndex
+        )
+    }
+
     override fun enterProgram(ctx: CoolLangParser.ProgramContext?) {
-        global = true
         llvmBuilder = LLVMBuilder()
+        scopes.push("main")
+        llvmBuilder.setScope("main")
     }
 
     override fun exitProgram(ctx: CoolLangParser.ProgramContext) {
@@ -31,12 +147,21 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
     }
 
     override fun exitFunctionName(ctx: CoolLangParser.FunctionNameContext) {
+
+        if(currentScope != "main") {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "Nested functions are not supported. Cannot define function ${ctx.ID().text} in function $currentScope", ctx.ID().symbol.line, ctx.ID().symbol.charPositionInLine
+            ))
+            return
+        }
+
         val name = ctx.ID().text
         functions.add(name)
         function = name
         llvmBuilder.functionStart(name)
-
-        global = false
+        currentScope = function
+        llvmBuilder.setScope(function)
+        scopes.push(function)
     }
 
     override fun exitFunctionCall(ctx: CoolLangParser.FunctionCallContext) {
@@ -45,8 +170,17 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
 
     override fun exitFunctionBody(ctx: CoolLangParser.FunctionBodyContext) {
 
-        llvmBuilder.functionEnd(function)
-        global = true
+        llvmBuilder.functionEnd()
+
+        scopes.pop()
+
+        if(scopes.isNotEmpty()) {
+            currentScope = scopes.first
+        } else {
+            currentScope = "main"
+        }
+
+        llvmBuilder.setScope(currentScope)
     }
 
     override fun enterIfBody(ctx: CoolLangParser.IfBodyContext?) {
@@ -61,7 +195,7 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
             }
 
             ctx.ID() != null -> {
-                llvmBuilder.startLoopVariable(ctx.ID().text, global)
+                llvmBuilder.startLoopVariable(ctx.ID().text)
             }
 
             ctx.INT() != null -> {
@@ -89,7 +223,7 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
                 add(SyntaxErrorWithLineData(UndeclaredIdentifierError(typeNode.text), typeNode))
             }
 
-            if (idNode != null && llvmBuilder.doesVariableExist(idNode.text)) {
+            if (idNode != null && llvmBuilder.doesVariableExistInExactScope(idNode.text, currentScope)) {
                 add(SyntaxErrorWithLineData(RedefinitionError(idNode.text), idNode))
             }
         }
@@ -102,14 +236,14 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
         llvmBuilder.declaration(
             type,
             idNode.text,
-            global
+            currentScope == "main"
         )
     }
 
     override fun exitReadOperation(ctx: CoolLangParser.ReadOperationContext) {
         val idToken = ctx.ID() ?: return
 
-        if (!llvmBuilder.doesVariableExist(idToken.text)) {
+        if (!llvmBuilder.doesVariableExist(idToken.text, currentScope)) {
             syntaxErrors.add(SyntaxErrorWithLineData(UndeclaredIdentifierError(idToken.text), idToken))
             return
         }
@@ -132,8 +266,32 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
 
     override fun exitExpression(ctx: CoolLangParser.ExpressionContext) {
         when {
-            ctx.ID() != null -> if (llvmBuilder.doesVariableExist(ctx.ID().text)) {
-                llvmBuilder.loadVariableToStack(ctx.ID().text, global)
+            ctx.ID() != null -> if (llvmBuilder.doesVariableExist(ctx.ID().text, currentScope)) {
+
+                val type = llvmBuilder.getVariableType(ctx.ID().text)
+                if(type == Type.STRUCT) {
+                    syntaxErrors.add(
+                        SyntaxErrorWithLineData(
+                            "Raw struct cannot be used in expression. User struct variable call instead",
+                            ctx.ID().symbol.line,
+                            ctx.ID().symbol.charPositionInLine
+                        )
+                    )
+                    return
+                }
+
+                val variable = llvmBuilder.getVariable(ctx.ID().text)
+                if(variable == null) {
+                    syntaxErrors.add(
+                        SyntaxErrorWithLineData(
+                            "undef variable ${ctx.ID().text} in scope $currentScope",
+                            ctx.ID().symbol.line,
+                            ctx.ID().symbol.charPositionInLine)
+                    )
+                    return
+                }
+
+                llvmBuilder.loadVariableToStack(ctx.ID().text)
             } else {
                 syntaxErrors.add(
                     SyntaxErrorWithLineData(
@@ -141,6 +299,7 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
                         ctx.ID()
                     )
                 )
+                return
             }
 
             ctx.op != null -> try {
@@ -166,7 +325,67 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
             ctx.INT() != null -> {
                 llvmBuilder.loadIntToStack(ctx.INT().text)
             }
+
+            ctx.structVariableCall() != null -> {
+
+                loadStructVariableToStack(ctx.structVariableCall())
+            }
         }
+    }
+
+    fun loadStructVariableToStack(ctx: CoolLangParser.StructVariableCallContext) {
+        val structNameIdNode = ctx.structName().ID()
+        val structVariableNameIdNode = ctx.structVariable().ID()
+
+        val structType = llvmBuilder.getStructTypeFromStructName(
+            ctx.structName().ID().text,
+            currentScope
+        )
+
+        if(structType == null) {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "Undeclared struct variable ${structNameIdNode.text}",
+                structNameIdNode.symbol.line,
+                structNameIdNode.symbol.charPositionInLine
+            ))
+
+            return
+        }
+
+        val struct = llvmBuilder.getStructDefinition(structType)
+
+        if(struct == null) {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "Struct type ${structNameIdNode.text} does not exist",
+                structNameIdNode.symbol.line,
+                structNameIdNode.symbol.charPositionInLine
+            ))
+            return
+        } else if(struct.scope != currentScope && struct.scope != "main") {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "Struct type ${structNameIdNode.text}, defined in scope ${struct.scope} is outside of scope $currentScope",
+                structNameIdNode.symbol.line,
+                structNameIdNode.symbol.charPositionInLine
+            ))
+            return
+        }
+
+        var structVariableIndex = llvmBuilder.getIndexOfStructVariable(struct, structVariableNameIdNode.text)
+
+        if(structVariableIndex == null) {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "Struct type ${structNameIdNode.text} does not have variable ${structVariableNameIdNode.text}",
+                structVariableNameIdNode.symbol.line,
+                structVariableNameIdNode.symbol.charPositionInLine
+            ))
+            return
+        }
+
+        llvmBuilder.loadStructVariableToStack(
+            structNameIdNode.text,
+            struct,
+            structVariableIndex
+        )
     }
 
     override fun exitBoolOrExpr(ctx: CoolLangParser.BoolOrExprContext?) {
@@ -202,8 +421,8 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
 
         when {
 
-            ctx.ID() != null -> if (llvmBuilder.doesVariableExist(ctx.ID().text)) {
-                llvmBuilder.loadVariableToStack(ctx.ID().text, global)
+            ctx.ID() != null -> if (llvmBuilder.doesVariableExist(ctx.ID().text, currentScope)) {
+                llvmBuilder.loadVariableToStack(ctx.ID().text)
             } else {
                 syntaxErrors.add(
                     SyntaxErrorWithLineData(
@@ -220,24 +439,35 @@ class CoolLangListenerImpl : CoolLangBaseListener() {
             ctx.boolExpression() != null -> {
                 //TODO
             }
+
+            ctx.structVariableCall() != null -> {
+                loadStructVariableToStack(ctx.structVariableCall())
+            }
         }
 
     }
 
     override fun exitAssignment(ctx: CoolLangParser.AssignmentContext) {
         val idNode = ctx.ID() ?: return
-        if (!llvmBuilder.doesVariableExist(idNode.text)) {
+
+        if (!llvmBuilder.doesVariableExist(idNode.text, currentScope)) {
             syntaxErrors.add(
                 SyntaxErrorWithLineData(UndeclaredIdentifierError(idNode.text), idNode)
             )
             return
         }
 
-        if(global) {
-            llvmBuilder.storeToGlobal(idNode.text)
-        } else {
-            llvmBuilder.storeTo(idNode.text)
+        val variableType = llvmBuilder.getVariableType(idNode.text)
+        if(variableType == Type.STRUCT) {
+            syntaxErrors.add(SyntaxErrorWithLineData(
+                "Cannot assign variable with type struct. Assign struct variables instead.",
+                idNode.symbol.line,
+                idNode.symbol.charPositionInLine
+            ))
+            return
         }
+
+        llvmBuilder.storeTo(idNode.text)
     }
 
 }

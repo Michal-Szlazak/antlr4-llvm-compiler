@@ -21,6 +21,11 @@ class SyntaxErrorWithLineData(
     )
 
     override fun toString(): String {
+
+        if(lineNumber < 0 || characterPosition < 0) {
+            return message
+        }
+
         return "line $lineNumber:$characterPosition $message"
     }
 }
